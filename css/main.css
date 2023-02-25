@@ -509,6 +509,7 @@ img::-moz-selection {
     vertical-align: middle; }
 
   .panel-title {
+    font-family:'Arial','Times New Roman','Microsoft YaHei';
     margin: 0 0 5px 0;
     margin-top: 20px;
     font-size: 1.8em;
