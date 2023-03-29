@@ -1,0 +1,94 @@
+@startuml
+' left to right direction
+
+class task_struct {
+    struct css_set __rcu            *cgroups
+}
+note left of task_struct::cgroups
+    存储了与进程有关的 cgroups 信息
+end note
+
+class cgroup {
+    struct cgroup_subsys_state self
+    unsigned long flags           
+    int level
+    int max_depth
+    struct cgroup_subsys_state __rcu *subsys[CGROUP_SUBSYS_COUNT]
+    struct list_head cset_links
+    struct list_head cgrp_links
+}
+note left of cgroup::subsys
+    此 cgroup 跟各个子系统相关的信息
+end note
+
+
+class cgroup_subsys_state {
+    struct cgroup *cgroup;
+        struct cgroup_subsys* ss
+        struct percpu_ref refcnt
+        struct list_head sibling
+        struct list_head children
+        struct list_head rstat_css_node
+        int id
+        unsigned int flags
+        u64 serial_nr
+        atomic_t online_cnt
+        struct work_struct destroy_work
+        struct rcu_work destroy_rwork
+        struct cgroup_subsys_state *parent;
+}
+note top: 代表进程与一个特定子系统相关的信息
+
+class cgroup_subsys {
+    int (*css_online)(struct cgroup_subsys_state *css)
+    void (*css_offline)(struct cgroup_subsys_state *css)
+    void (*css_released)(struct cgroup_subsys_state *css)
+    void (*css_free)(struct cgroup_subsys_state *css)
+    struct cgroup_root *root
+}
+note right: cgroup子系统的通用接口，如cpuset、memory、freezer等
+
+
+class css_set {
+    struct cgroup_subsys_state *subsys[CGROUP_SUBSYS_COUNT]
+    refcount_t refcount
+    css_set *dom_cset
+    struct cgroup *dfl_cgrp
+    struct list_head tasks
+}
+
+note right of css_set::subsys
+    包含的子系统初始化后不可更改
+end note
+
+note right of css_set::dfl_cgrp
+    但前的css_set所对应的cgroup
+end note
+
+note right of css_set::tasks
+    指向所有连到此css_set的进程连成的链表
+end note
+
+
+class cgrp_cset_link {
+        struct cgroup           *cgrp;
+        struct css_set          *cset;
+        struct list_head        cset_link;
+        struct list_head        cgrp_link;
+}
+
+
+
+task_struct::cgroups *-- css_set
+cgroup::self *-- cgroup_subsys_state
+cgroup_subsys_state::cgroup *-- cgroup
+
+cgroup_subsys_state::ss <|-- cgroup_subsys
+
+css_set::subsys <=-- cgroup_subsys
+
+cgrp_cset_link::cgrp <|-- cgroup
+cgrp_cset_link::cset <|-- css_set 
+
+
+@enduml
