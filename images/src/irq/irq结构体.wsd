@@ -1,0 +1,102 @@
+@startuml
+' left to right direction
+
+class irq_chip {
+        struct device   *parent_device;
+        const char      *name;d
+        unsigned long   flags;
+        unsigned int    (*irq_startup)(struct irq_data *data);
+        void            (*irq_shutdown)(struct irq_data *data);
+        void            (*irq_enable)(struct irq_data *data);
+        void            (*irq_disable)(struct irq_data *data);
+
+        void            (*irq_ack)(struct irq_data *data);
+        void            (*irq_mask)(struct irq_data *data);
+        void            (*irq_mask_ack)(struct irq_data *data);
+        void            (*irq_unmask)(struct irq_data *data);
+        void            (*irq_eoi)(struct irq_data *data);
+        void            ...()
+}
+note top: 中断控制器的描述符，定义了中断控制器的各种操作
+
+class irq_domain {
+        struct list_head link;
+        const char *name;
+        const struct irq_domain_ops *ops;
+        void *host_data;
+        unsigned int flags;
+        unsigned int mapcount;
+
+        struct fwnode_handle *fwnode;
+        enum irq_domain_bus_token bus_token;
+        struct irq_domain_chip_generic *gc;
+        irq_hw_number_t hwirq_max;
+        unsigned int revmap_direct_max_irq;
+        unsigned int revmap_size;
+        struct radix_tree_root revmap_tree;
+        struct mutex revmap_tree_mutex;
+        KABI_RESERVE(1)
+        unsigned int linear_revmap[];
+}
+
+note top: 中断域， 每个控制器件有自己的中断域， 用于本地的硬件中断号映射到全局的linux中断号
+note right of irq_domain::ops
+    irq_domain对应的操作方法
+end note
+
+
+class irq_desc {
+        struct irq_common_data  irq_common_data;
+        struct irq_data         irq_data;
+        unsigned int __percpu   *kstat_irqs;
+        irq_flow_handler_t      handle_irq;
+        struct irqaction        *action;        /* IRQ action list */
+        unsigned int            status_use_accessors;
+        unsigned int            core_internal_state__do_not_mess_with_it;
+        unsigned int            depth;          /* nested irq disables */
+        unsigned int            wake_depth;     /* nested wake enables */
+        unsigned int            tot_count;
+        unsigned int            irq_count;      /* For detecting broken IRQs */
+        unsigned long           last_unhandled; /* Aging timer for unhandled count */
+        unsigned int            irqs_unhandled;
+        atomic_t                threads_handled;
+        int                     threads_handled_last;
+}
+
+note right of irq_desc::handle_irq
+    中断处理程序， high level处理,
+end note
+
+class irqaction {
+        irq_handler_t           handler;
+        void                    *dev_id;
+        void __percpu           *percpu_dev_id;
+        struct irqaction        *next
+        irq_handler_t           thread_fn
+        struct task_struct      *thread
+        struct irqaction        *secondary
+        unsigned_int            irq
+        unsigned int            flags
+        unsigned long           thread_flags
+        unsigned long           thread_mask
+        const char              *name
+        struct proc_dir_entry   *dir
+} 
+note left: 设备注册的中断处理函数
+
+note right of irqaction::handler
+    对应设备的中断服务例程
+end note
+
+note right of irqaction::dev_id
+    IO设备的私有字段
+end note
+
+note right of irqaction::name
+    IO设备名, 显示在目录/proc/interrupts
+end note
+
+irq_desc::action *-- irqaction
+
+
+@enduml
