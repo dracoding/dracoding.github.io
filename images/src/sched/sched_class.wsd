@@ -1,0 +1,240 @@
+@startuml
+' left to right direction
+
+
+class sched_class {
+    int uclamp_enabled;
+
+    void (*enqueue_task) (struct rq *rq, struct task_struct *p, int flags);
+    void (*dequeue_task) (struct rq *rq, struct task_struct *p, int flags);
+    void (*yield_task)   (struct rq *rq);
+    bool (*yield_to_task)(struct rq *rq, struct task_struct *p);sss
+    void (*check_preempt_curr)(struct rq *rq, struct task_struct *p, int flags);
+    struct task_struct *(*pick_next_task)(struct rq *rq);
+    void (*put_prev_task)(struct rq *rq, struct task_struct *p);
+    void (*set_next_task)(struct rq *rq, struct task_struct *p, bool first);
+
+    int (*balance)(struct rq *rq, struct task_struct *prev, struct rq_flags *rf);
+    int  (*select_task_rq)(struct task_struct *p, int task_cpu, int sd_flag, int flags);
+    void (*migrate_task_rq)(struct task_struct *p, int new_cpu);
+    void (*task_woken)(struct rq *this_rq, struct task_struct *task);
+    void (*set_cpus_allowed)(struct task_struct *p, const struct cpumask *newmask);
+    void (*rq_online)(struct rq *rq);
+    void (*rq_offline)(struct rq *rq);
+
+    void (*task_tick)(struct rq *rq, struct task_struct *p, int queued);
+    void (*task_fork)(struct task_struct *p);
+    void (*task_dead)(struct task_struct *p);
+    void (*switched_from)(struct rq *this_rq, struct task_struct *task);
+    void (*switched_to)  (struct rq *this_rq, struct task_struct *task);
+    void (*prio_changed) (struct rq *this_rq, struct task_struct *task, int oldprio);
+    unsigned int (*get_rr_interval)(struct rq *rq, struct task_struct *task);
+    void (*update_curr)(struct rq *rq);
+
+    void (*task_change_group)(struct task_struct *p, int type);
+
+}
+
+note top: 调度类的定义， 定义了调度类方法的集合
+
+note right of sched_class::uclamp_enabled
+    enabled for CONFIG_UCLAMP_TASK config ###
+end note
+
+
+note right of sched_class::enqueue_task
+    将进程添加到rq队列中
+end note
+
+note right of sched_class::dequeue_task
+    从rq队列中删除进程
+end note
+
+note right of sched_class::balance
+    start method defined for SMP ***
+end note
+
+note right of sched_class::select_task_rq
+    start method defined for SMP ***
+end note
+
+note right of sched_class::rq_offline
+    end method defined for SMP ***
+end note
+
+note right of sched_class::task_fork
+    新创建进程的初始化动作
+end note
+
+note right of sched_class::update_curr
+    更新当前进程的的vruntime
+end note
+
+note right of sched_class::task_change_group
+    enabled for CONFIG_FAIR_GROUP_SCHED config %%%
+end note
+
+
+class rq {
+    raw_spinlock_t          lock;
+    unsigned int            nr_running;
+    u64 nr_switches;
+
+    struct uclamp_rq        uclamp[UCLAMP_CNT];
+    unsigned int            uclamp_flags;
+
+    struct cfs_rq cfs;
+    struct rt_rq rt;
+    struct dl_rq dl;
+
+    unsigned long           nr_uninterruptible;
+    struct task_struct __rcu        *curr;
+    struct task_struct      *idle;
+    struct task_struct      *stop;
+    unsigned long next_balance;
+    struct mm_struct *prev_mm;
+
+    unsigned int clock_update_flags;
+    u64 clock;
+    u64 clock_task;
+    u64 clock_pelt;
+    unsigned long lost_idle_time;
+    atomic_t nr_iowait;
+    unsigned long calc_load_update;
+    long calc_load_active;
+}
+
+note right: 每个处理器都有一个运行队列
+
+note left of rq::lock
+    runqueue lock
+end note
+
+note left of rq::uclamp
+    CONFI_GUCLAMP_TASK
+    /* Utilization clamp values based on CPU's RUNNABLE tasks */
+end note
+
+note left of rq::cfs
+    cfs调度类的队列
+end note
+
+note left of rq::rt
+    实时调度类的队列
+end note
+
+note left of rq::dl
+    deadline调度类的队列
+end note
+
+class task_struct {
+    int prio;
+    int static_prio;
+    int normal_prio;
+    unsigned int  rt_priority;
+
+    const struct sched_class *sched_class;
+    struct sched_entity se;
+    struct sched_rt_entity rt;
+    struct sched_dl_entity dl;
+
+}
+
+note left of task_struct::static_prio
+    进程的静态优先级, 进程启动时分配， 可由nice值修改
+end note
+
+note left of task_struct::normal_prio
+    通过static_prio或rt_priority和调度策略计算的优先级
+end note
+
+note left of task_struct::rt_priority
+    实时进程的优先级
+end note
+
+class sched_entity {
+    struct load_weight load;
+    struct rb_node run_node;
+    struct list_head group_node;
+    unsigned int on_rq;
+
+    u64 exec_start;
+    u64 sum_exec_runtime;
+    u64 vruntime;
+    u64 prev_sum_exec_runtime;
+
+    u64 nr_migrations;
+    struct sched_statistics         statistics;
+
+    int depth;
+    struct sched_entity *parent;
+    struct cfs_rq *cfs_rq;
+    struct cfs_rq *my_q;
+    unsigned long runnable_weight;
+
+    struct sched_avg avg;
+}
+
+note right: 调度器的对象时调度实体， 调度实体是进程或进程组
+
+note left of sched_entity::load
+    当前sched_entity的权重信息
+end note
+
+note left of sched_entity::on_rq
+    调度实体是否在就绪队列中
+end note
+
+note left of sched_entity::vruntime
+    该调度实体的虚拟运行时间
+end note
+
+note left of sched_entity::depth
+    CONFIG_FAIR_GROUP_SCHED %%% start
+    调度实体在调度树中的深度
+end note
+
+note left of sched_entity::cfs_rq
+    调度实体所属的公平运行队列
+end note
+
+note left of sched_entity::my_q
+    调度实体拥有的公平运行队列
+end note
+
+note left of sched_entity::runnable_weight
+    CONFIG_FAIR_GROUP_SCHED %%% end
+end note
+
+note left of sched_entity::avg
+    支持SMP时使用 ***
+    进程的负载
+end note
+
+
+struct task_group {
+    struct cgroup_subsys_state css;
+  
+    struct sched_entity     **se;
+    struct cfs_rq           **cfs_rq;
+    unsigned long           shares;
+
+    struct sched_rt_entity  **rt_se;
+    struct rt_rq            **rt_rq;
+
+    struct rt_bandwidth     rt_bandwidth;
+}
+
+note left of task_group::se
+    调度组在每个cpu上的调度实体
+end note
+
+note left of task_group::cfs_rq
+    调度组在每个cpu上的公平调度队列
+end note
+
+task_struct::sched_class --* sched_class
+task_struct::se --* sched_entity
+
+task_group::se --* sched_entity
+sched_entity::cfs_rq --* rq::cfs
