@@ -104,7 +104,7 @@ class rq {
     long calc_load_active;
 }
 
-note right: 每个处理器都有一个运行队列
+note top: 每个处理器都有一个运行队列
 
 note left of rq::lock
     runqueue lock
@@ -208,7 +208,7 @@ end note
 
 note left of sched_entity::avg
     支持SMP时使用 ***
-    进程的负载
+    调度实体的平均负载
 end note
 
 
@@ -233,8 +233,84 @@ note left of task_group::cfs_rq
     调度组在每个cpu上的公平调度队列
 end note
 
+class cfs_rq {
+    struct load_weight load;
+    unsigned int nr_running;
+    unsigned int h_nr_running;      /* SCHED_{NORMAL,BATCH,IDLE} */
+    unsigned int idle_h_nr_running; /* SCHED_IDLE */
+    u64 exec_clock;
+    u64 min_vruntime;
+    struct rb_root_cached   tasks_timeline;
+    struct sched_entity     *curr;
+    struct sched_entity     *next;
+    struct sched_entity     *last;
+    struct sched_entity     *skip;
+    struct sched_avg        avg;
+    struct {
+            raw_spinlock_t  lock ____cacheline_aligned;
+            int             nr;
+            unsigned long   load_avg;
+            unsigned long   util_avg;
+            unsigned long   runnable_avg;
+    } removed;
+    unsigned long tg_load_avg_contrib;
+    long propagate;
+    long prop_runnable_sum;
+    unsigned long           h_load;
+    u64 last_h_load_update;
+    struct sched_entity     *h_load_next;
+    struct rq               *rq;    /* CPU runqueue to which this cfs_rq is attached */
+    int on_list;
+    struct list_head        leaf_cfs_rq_list;
+    struct task_group       *tg;    /* group that "owns" this runqueue */
+    int runtime_enabled;
+    s64 runtime_remaining;
+    u64 throttled_clock;
+    u64 throttled_clock_task;
+    u64 throttled_clock_task_time;
+    int throttled;
+    int throttle_count;
+    struct list_head throttled_list;
+}
+
+note right of cfs_rq::curr
+    该队列上正在运行的调度实体
+end note
+
+note right of cfs_rq::avg
+    CONFIG_SMP %%% start
+    该队列的总平均负载
+end note
+
+note right of cfs_rq::tg_load_avg_contrib
+    CONFIG_SMP %%% start
+    该队列的总平均负载
+end note
+
+note right of cfs_rq::h_load_next
+    CONFIG_FAIR_GROUP_SCHED %%% end
+    CONFIG_SMP %%% end
+end note
+
+note right of cfs_rq::rq
+    CONFIG_FAIR_GROUP_SCHED %%% start
+    该cfs_rq所属的rq
+end note
+
+note right of cfs_rq::runtime_enabled
+    CONFIG_CFS_BANDWIDTH %%% start
+end note
+
+note right of cfs_rq::throttled_list
+    CONFIG_CFS_BANDWIDTH %%% end
+    CONFIG_FAIR_GROUP_SCHED %%% end
+end note
+
 task_struct::sched_class --* sched_class
 task_struct::se --* sched_entity
 
 task_group::se --* sched_entity
-sched_entity::cfs_rq --* rq::cfs
+sched_entity::cfs_rq --* cfs_rq
+
+cfs_rq *-left- rq::cfs
+
