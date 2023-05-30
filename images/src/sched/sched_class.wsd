@@ -195,11 +195,11 @@ note left of sched_entity::depth
 end note
 
 note left of sched_entity::cfs_rq
-    调度实体所属的公平运行队列
+    调度实体所属的根运行队列
 end note
 
 note left of sched_entity::my_q
-    调度实体拥有的公平运行队列
+    调度实体拥有的公平运行队列（调度组的调度实体）
 end note
 
 note left of sched_entity::runnable_weight
@@ -225,12 +225,16 @@ struct task_group {
     struct rt_bandwidth     rt_bandwidth;
 }
 
-note left of task_group::se
+note right of task_group::se
     调度组在每个cpu上的调度实体
 end note
 
-note left of task_group::cfs_rq
+note right of task_group::cfs_rq
     调度组在每个cpu上的公平调度队列
+end note
+
+note right of task_group::shares
+    该cgroup对应的权重值
 end note
 
 class cfs_rq {
@@ -273,6 +277,14 @@ class cfs_rq {
     struct list_head throttled_list;
 }
 
+note right of cfs_rq::nr_running
+    CFS就绪队列所有调度实体个数 
+end note
+
+note right of cfs_rq::h_nr_running
+    就绪队列层级上所有调度实体的个数, 包含group se对应group cfs_rq上的调度实体 
+end note
+
 note right of cfs_rq::curr
     该队列上正在运行的调度实体
 end note
@@ -310,7 +322,8 @@ task_struct::sched_class --* sched_class
 task_struct::se --* sched_entity
 
 task_group::se --* sched_entity
+cfs_rq::tg --* task_group
 sched_entity::cfs_rq --* cfs_rq
 
-cfs_rq *-left- rq::cfs
+cfs_rq *-- rq::cfs
 
