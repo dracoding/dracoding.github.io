@@ -100,6 +100,9 @@ class rq {
     u64 clock_pelt;
     unsigned long lost_idle_time;
     atomic_t nr_iowait;
+
+    unsigned char idle_balance;
+
     unsigned long calc_load_update;
     long calc_load_active;
 }
@@ -125,6 +128,10 @@ end note
 
 note left of rq::dl
     deadline调度类的队列
+end note
+
+note left of rq::idle_balance
+    当前cpu是否处于idle状态
 end note
 
 class task_struct {
@@ -170,7 +177,10 @@ class sched_entity {
     struct sched_entity *parent;
     struct cfs_rq *cfs_rq;
     struct cfs_rq *my_q;
-    unsigned long runnable_weight;
+    unsigned long runnable_weight; 
+    
+    struct root_domain              *rd;
+    struct sched_domain __rcu       *sd;
 
     struct sched_avg avg;
 }
@@ -318,6 +328,126 @@ note right of cfs_rq::throttled_list
     CONFIG_FAIR_GROUP_SCHED %%% end
 end note
 
+class root_domain {
+        atomic_t refcount;
+        atomic_t rto_count;
+        struct rcu_head rcu;
+        cpumask_var_t span;
+        cpumask_var_t online;
+        int overload;
+        int overutilized;
+
+        cpumask_var_t dlo_mask;
+        atomic_t dlo_count;
+        struct dl_bw dl_bw;
+        struct cpudl cpudl;
+
+        cpumask_var_t rto_mask;
+        struct cpupri cpupri;
+
+        unsigned long max_cpu_capacity;
+
+        struct perf_domain __rcu *pd;
+}
+
+class sched_domain {
+    struct sched_domain __rcu *parent;      /* top domain must be null terminated */
+    struct sched_domain __rcu *child;       /* bottom domain must be null terminated */
+    struct sched_group *groups;     /* the balancing groups of the domain */
+    unsigned long min_interval;     /* Minimum balance interval ms */
+    unsigned long max_interval;     /* Maximum balance interval ms */
+    unsigned int busy_factor;       /* less balancing by factor if busy */
+    unsigned int imbalance_pct;     /* No balance until over watermark */
+    unsigned int cache_nice_tries;  /* Leave cache hot tasks for # tries */
+    int nohz_idle;                  /* NOHZ IDLE status */
+    int flags;                      /* See SD_* */
+    int level;
+    unsigned long last_balance;     /* init to jiffies. units in jiffies */
+    unsigned int balance_interval;  /* initialise to 1. units in ms. */
+    unsigned int nr_balance_failed; /* initialise to 0 */
+    u64 max_newidle_lb_cost;
+    unsigned long next_decay_max_lb_cost;
+    u64 avg_scan_cost;              /* select_idle_sibling */
+    union {
+        void *private;          /* used during construction */
+        struct rcu_head rcu;    /* used during destruction */
+    };
+    struct sched_domain_shared *shared;
+    unsigned int span_weight;
+
+    unsigned long span[];
+}
+
+note top: 调度域,和cpu的拓扑有关
+
+note left of sched_domain::parent
+    调度域的父节点， 组成树状的拓扑结构 
+end note
+
+note left of sched_domain::busy_factor
+    如果cpu繁忙, 那么均衡时间间隔定义为busy_factor x balance_interval 
+end note
+
+note left of sched_domain::balance_interval
+    调度域的均衡的基础时间间隔
+end note
+
+
+
+
+class sched_domain_shared {
+        atomic_t        ref;
+        atomic_t        nr_busy_cpus;
+        int             has_idle_cores;
+        struct sparsemask *cfs_overload_cpus;
+}
+
+note top: 调度域共享的信息
+
+
+class sched_group {
+        struct sched_group *next;                  /* Must be a circular list */
+        atomic_t ref;
+        
+        unsigned int group_weight;
+        struct sched_group_capacity *sgc;
+        int asym_prefer_cpu;        /* CPU of highest priority in group */
+        
+        unsigned long cpumask[];
+}  
+
+note top: 调度域组, 一个调度域内可以划分多个调度域组
+
+note left of sched_group::next
+    多个调度域组组成一个链表，调度组的下一个节点
+end note
+
+note left of sched_group::group_weight
+    调度域组的cpu数量
+end note
+
+note left of sched_group::sgc
+    调度域组的的算力信息
+end note
+
+note left of sched_group::cpumask
+    调度域组包含的cpu
+end note
+
+
+
+
+
+class perf_domain { 
+        struct em_perf_domain *em_pd;
+        struct perf_domain *next;
+        struct rcu_head rcu;
+}
+
+
+sched_domain::groups --* sched_group
+sched_domain::shared --* sched_domain_shared
+
 task_struct::sched_class --* sched_class
 task_struct::se --* sched_entity
 
@@ -326,4 +456,8 @@ cfs_rq::tg --* task_group
 sched_entity::cfs_rq --* cfs_rq
 
 cfs_rq *-- rq::cfs
+rq::sd --* sched_domain
+rq::rd --* root_domain
+
+root_domain::pd --* perf_domain
 
