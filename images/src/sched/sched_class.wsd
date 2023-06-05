@@ -135,6 +135,10 @@ note left of rq::idle_balance
 end note
 
 class task_struct {
+    unsigned int wakee_flips;
+    unsigned long wakee_flip_decay_ts;
+    struct task_struct *last_wakee;
+
     int prio;
     int static_prio;
     int normal_prio;
@@ -146,6 +150,13 @@ class task_struct {
     struct sched_dl_entity dl;
 
 }
+
+note left of task_struct::wakee_flips
+    当前进程作为waker切换唤醒目标的次数, 值越大， 说明当前进程唤醒多个wakee
+end note
+note left of task_struct::last_wakee
+    上一次唤醒的进程
+end note
 
 note left of task_struct::static_prio
     进程的静态优先级, 进程启动时分配， 可由nice值修改
