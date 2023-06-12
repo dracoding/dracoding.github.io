@@ -1,0 +1,155 @@
+@startuml
+' left to right direction
+
+class pglist_data {
+
+    struct zone node_zones[MAX_NR_ZONES];
+    struct zonelist node_zonelists[MAX_ZONELISTS];
+    int nr_zones; /* number of populated zones in this node */
+    struct page *node_mem_map;  /* CONFIG_FLAT_NODE_MEM_MAP */
+    
+    unsigned long node_start_pfn;
+    unsigned long node_present_pages; /* total number of physical pages */
+    unsigned long node_spanned_pages; /* total size of physical page range, including holes */
+    int node_id;
+    wait_queue_head_t kswapd_wait;
+    wait_queue_head_t pfmemalloc_wait;
+    struct task_struct *kswapd;     /* Protected by mem_hotplug_begin/end */
+    int kswapd_order;
+    enum zone_type kswapd_highest_zoneidx;
+    int kswapd_failures;            /* Number of 'reclaimed == 0' runs */
+    unsigned long totalreserve_pages;
+    unsigned long flags;
+    struct per_cpu_nodestat __percpu *per_cpu_nodestats;
+    atomic_long_t           vm_stat[NR_VM_NODE_STAT_ITEMS];
+}
+
+note top: pg_data_t
+
+note right of pglist_data::node_zones
+    内存区域的数组
+end note
+
+note right of pglist_data::node_zonelists
+    备用区域链表
+end note
+
+note right of pglist_data::nr_zones
+    内存区域的数量
+end note
+
+note right of pglist_data::node_mem_map
+    指向页描述符数组
+end note
+
+note right of pglist_data::node_start_pfn
+    起始物理页号
+end note
+
+note right of pglist_data::node_present_pages
+    物理页的总数
+end note
+
+note right of pglist_data::node_id
+    内存节点标识符
+end note
+
+class zone {
+        unsigned long _watermark[NR_WMARK];
+        unsigned long watermark_boost;
+
+        unsigned long nr_reserved_highatomic;
+        long lowmem_reserve[MAX_NR_ZONES];
+
+        struct pglist_data      *zone_pgdat;
+        struct per_cpu_pageset __percpu *pageset;
+
+        int pageset_high;
+        int pageset_batch;
+        unsigned long zone_start_pfn;
+
+        atomic_long_t           managed_pages;
+        unsigned long spanned_pages;
+        unsigned long present_pages;
+        const char *name;
+        int initialized;
+        struct free_area        free_area[MAX_ORDER];
+        unsigned long flags;
+
+        spinlock_t lock;
+
+        unsigned long percpu_drift_mark;
+        bool contiguous;
+
+        atomic_long_t           vm_stat[NR_VM_ZONE_STAT_ITEMS];
+        atomic_long_t           vm_numa_stat[NR_VM_NUMA_STAT_ITEMS];
+}
+
+note left of zone::_watermark
+    页分配器使用的水线
+end note
+
+note left of zone::zone_pgdat
+    内存节点的实例
+end note
+
+note left of zone::zone_start_pfn
+    当前区域的初始物理页号
+end note
+
+note left of zone::managed_pages
+    物理页的总数量
+end note
+
+note left of zone::free_area
+    空闲的区域
+end note
+
+
+class zonelist {
+    struct zoneref _zonerefs[MAX_ZONES_PER_ZONELIST + 1];
+}
+
+class zoneref {
+    struct zone *zone;
+    int zone_idx;
+}
+
+note left of zoneref::zone_idx
+    区域zone指向的内存区域的类型
+end note
+
+
+class alloc_context {
+    struct zonelist *zonelist;
+    nodemask_t *nodemask;
+    struct zoneref *preferred_zoneref;
+    int migratetype;
+
+    enum zone_type highest_zoneidx;
+    bool spread_dirty_pages;
+}
+
+note top: 内存分配的上下文
+
+
+
+' zone::zone_pgdat --> pglist_data
+
+pglist_data::node_zones --* zone
+pglist_data::node_zonelists -left-* zonelist
+zonelist::_zonerefs --* zoneref
+zoneref::zone --* zone
+
+alloc_context::zonelist -right-* zonelist
+alloc_context::preferred_zoneref --* zoneref
+
+
+
+
+
+
+
+
+
+

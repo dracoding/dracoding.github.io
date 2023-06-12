@@ -1,0 +1,69 @@
+@startuml
+' left to right direction
+
+class memblock {
+        bool bottom_up;  /* is bottom up direction? */
+        phys_addr_t current_limit;
+        struct memblock_type memory;
+        struct memblock_type reserved;
+}
+
+note left of memblock::bottom_up
+    内存分配的方式， true时从低地址向上分配, false时从高地址向下分配。
+end note
+
+note left of memblock::current_limit
+    可分配内存的最大物理地址
+end note
+
+class memblock_type {
+        unsigned long cnt;
+        unsigned long max;
+        phys_addr_t total_size;
+        struct memblock_region *regions;
+        char *name;
+}
+
+note left of memblock_type::cnt
+    内存块区域数量
+end note
+
+note left of memblock_type::max
+    已分配数组的大小
+end note
+
+note left of memblock_type::total_size
+    所有区域的长度
+end note
+
+note left of memblock_type::regions
+    内存块区域数组
+end note
+
+class memblock_region {
+        phys_addr_t base;
+        phys_addr_t size;
+        enum memblock_flags flags;
+        int nid;
+}
+
+note left of memblock_region::base
+    起始物理地址
+end note
+
+note left of memblock_region::size
+    地址长度
+end note
+
+
+
+memblock::memory --> memblock_type
+
+memblock_type::regions --* memblock_region
+
+
+
+
+
+
+

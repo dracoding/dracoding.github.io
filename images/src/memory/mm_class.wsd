@@ -1,0 +1,214 @@
+@startuml
+' left to right direction
+
+class task_struct {
+    struct mm_struct *mm;
+    struct mm_struct *active_mm;
+}
+
+note left of task_struct::mm
+    进程指向的内存描述符， 内核线程时， 为null
+end note
+note left of task_struct::active_mm
+    用户线程时和mm指向同一个内存描述符, 内核线程是没有运行指向null, 运行时指向从上一个进程借用的内存描述符
+end note
+
+
+class mm_struct {
+    struct vm_area_struct *mmap;
+    struct rb_root mm_rb;
+    u64 vmacache_seqnum;                   /* per-thread vmacache */
+    unsigned long mmap_base;        /* base of mmap area */
+    unsigned long mmap_legacy_base; /* base of mmap area in bottom-up allocations */
+    unsigned long task_size;        /* size of task vm space */
+    unsigned long highest_vm_end;   /* highest vma end address */
+    pgd_t * pgd;
+    atomic_t mm_users;
+    atomic_t mm_count;
+    atomic_t has_pinned;
+    int map_count;                  /* number of VMAs */
+    spinlock_t page_table_lock; /* Protects page tables and some counters*/
+
+    struct rw_semaphore mmap_lock;
+
+    unsigned long hiwater_rss; /* High-watermark of RSS usage */
+    unsigned long hiwater_vm;  /* High-water virtual memory usage */
+    unsigned long total_vm;    /* Total pages mapped */
+    unsigned long locked_vm;   /* Pages that have PG_mlocked set */
+    atomic64_t    pinned_vm;   /* Refcount permanently increased */
+    unsigned long data_vm;     /* VM_WRITE & ~VM_SHARED & ~VM_STACK */
+    unsigned long exec_vm;     /* VM_EXEC & ~VM_WRITE & ~VM_STACK */
+    unsigned long stack_vm;    /* VM_STACK */
+    unsigned long def_flags;
+
+    seqcount_t write_protect_seq;
+    spinlock_t arg_lock; /* protect the below fields */
+    unsigned long start_code, end_code, start_data, end_data;
+    unsigned long start_brk, brk, start_stack;
+    unsigned long arg_start, arg_end, env_start, env_end;
+    unsigned long saved_auxv[AT_VECTOR_SIZE]; /* for /proc/PID/auxv */
+
+    struct mm_rss_stat rss_stat;
+    struct linux_binfmt *binfmt;
+    mm_context_t context;
+    unsigned long flags; /* Must use atomic bitops to access */
+    struct core_state *core_state; /* coredumping support */
+
+    struct task_struct __rcu *owner;   //CONFIG_MEMCG
+    struct user_namespace *user_ns;
+    struct file __rcu *exe_file;
+    atomic_t tlb_flush_pending;
+    struct uprobes_state uprobes_state;
+    struct work_struct async_put_work;
+
+    unsigned long cpu_bitmap[];
+}
+
+note left of mm_struct::mmap
+    虚拟内存区域链表, 指向第一个虚拟内存区域
+end note
+
+note left of mm_struct::mm_rb
+    虚拟内存区域红黑树
+end note
+
+note left of mm_struct::mmap_base
+    内存映射区域的起始地址
+end note
+
+note left of mm_struct::pgd
+    一级页表目录
+end note
+
+note left of mm_struct::mm_users
+    共享内存虚拟地址的进程数量
+end note
+
+note left of mm_struct::mm_count
+    内存虚拟符的引用计数
+end note
+
+note left of mm_struct::start_code
+    代码段的起始地址和结束地址
+end note
+
+note left of mm_struct::start_data
+    数据段的起始地址和结束地址
+end note
+
+note left of mm_struct::start_brk
+    堆的起始地址和结束地址
+end note
+
+note left of mm_struct::context
+    处理器相关的内存管理上下文
+end note
+
+
+class mm_context_t {
+    atomic64_t id;
+    refcount_t pinned;
+    void *vdso;
+    unsigned long flags;
+}
+
+note left of mm_context_t::id
+    ARM64, asid字段
+end note
+
+
+class vm_area_struct {
+    unsigned long vm_start;         /* Our start address within vm_mm. */
+    unsigned long vm_end;           /* The first byte after our end address within vm_mm. */
+
+    struct vm_area_struct *vm_next, *vm_prev;
+    struct rb_node vm_rb;
+    unsigned long rb_subtree_gap;
+    struct mm_struct *vm_mm;        /* The address space we belong to. */
+    pgprot_t vm_page_prot;
+    unsigned long vm_flags;         /* Flags, see mm.h. */
+
+    struct list_head anon_vma_chain; /* Serialized by mmap_lock & page_table_lock */
+    struct anon_vma *anon_vma;      /* Serialized by page_table_lock */
+
+    unsigned long vm_pgoff;
+    struct file * vm_file;
+    void * vm_private_data;
+
+    struct mempolicy *vm_policy;   /* CONFIG_NUMA */
+    struct vm_userfaultfd_ctx vm_userfaultfd_ctx;
+
+    const struct vm_operations_struct *vm_ops;
+}
+
+note left of vm_area_struct::vm_start
+    虚拟内存区域的起始地址
+end note
+
+note left of vm_area_struct::vm_next
+    虚拟内存区域的链表
+end note
+
+note left of vm_area_struct::vm_mm
+    虚拟内存区域所属的用户虚拟地址空间
+end note
+
+note left of vm_area_struct::vm_pgoff
+    文件偏移
+end note
+
+note left of vm_area_struct::vm_file
+    文件映射时指向的文件
+end note
+
+note left of vm_area_struct::vm_ops
+    虚拟内存操作集合
+end note
+
+
+class vm_operations_struct {
+        void (*open)(struct vm_area_struct * area);
+        void (*close)(struct vm_area_struct * area);
+        int (*split)(struct vm_area_struct * area, unsigned long addr);
+        int (*mremap)(struct vm_area_struct * area);
+
+        int (*mprotect)(struct vm_area_struct *vma, unsigned long start,
+                        unsigned long end, unsigned long newflags);
+        vm_fault_t (*fault)(struct vm_fault *vmf);
+        vm_fault_t (*huge_fault)(struct vm_fault *vmf,
+                        enum page_entry_size pe_size);
+        void (*map_pages)(struct vm_fault *vmf,
+                        pgoff_t start_pgoff, pgoff_t end_pgoff);
+        unsigned long (*pagesize)(struct vm_area_struct * area);
+
+        vm_fault_t (*page_mkwrite)(struct vm_fault *vmf);
+
+        vm_fault_t (*pfn_mkwrite)(struct vm_fault *vmf);
+
+        int (*access)(struct vm_area_struct *vma, unsigned long addr,
+                      void *buf, int len, int write);
+
+        const char *(*name)(struct vm_area_struct *vma);
+
+        int (*set_policy)(struct vm_area_struct *vma, struct mempolicy *new);
+
+        struct mempolicy *(*get_policy)(struct vm_area_struct *vma,
+                                        unsigned long addr);
+
+        struct page *(*find_special_page)(struct vm_area_struct *vma,
+                                          unsigned long addr);
+}
+
+
+
+task_struct::mm --* mm_struct
+
+mm_struct::context --* mm_context_t
+
+mm_struct::mmap -right-* vm_area_struct
+
+vm_area_struct::vm_ops --* vm_operations_struct
+
+
+
+

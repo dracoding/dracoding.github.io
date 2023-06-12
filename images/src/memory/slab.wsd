@@ -1,0 +1,201 @@
+@startuml
+' left to right direction
+
+class kmem_cache {
+        struct array_cache __percpu *cpu_cache;
+        unsigned int batchcount;
+        unsigned int limit;
+        unsigned int shared;
+
+        unsigned int size;
+        struct reciprocal_value reciprocal_buffer_size;
+
+        slab_flags_t flags;             /* constant flags */
+        unsigned int num;               /* # of objs per slab */
+
+        unsigned int gfporder;  
+
+        gfp_t allocflags;
+
+        size_t colour;                  /* cache colouring range */
+        unsigned int colour_off;        /* colour offset */
+        struct kmem_cache *freelist_cache;
+        unsigned int freelist_size;
+
+        void (*ctor)(void *obj);
+
+        const char *name;
+        struct list_head list;
+        int refcount;
+        int object_size;
+        int align;
+
+        unsigned int useroffset;        /* Usercopy region offset */
+        unsigned int usersize;          /* Usercopy region size */
+
+        struct kmem_cache_node *node[MAX_NUMNODES];
+}
+
+note top: slab描述符,内存缓存
+
+note right of kmem_cache::cpu_cache
+    每个处理器的cache, 用于缓存刚刚释放的对象
+end note
+
+note right of kmem_cache::batchcount
+    本地array_cache为空时, 从共享的缓冲池中获取的对象数目
+end note
+
+note right of kmem_cache::limit
+    本地缓冲池的缓冲大小， 大于此值时， 释放batchcount个对象
+end note
+
+note right of kmem_cache::size
+    对象的长度
+end note
+
+note right of kmem_cache::num
+    每个slab对象的数量
+end note
+
+note right of kmem_cache::gfporder
+    slab的阶数
+end note
+
+note right of kmem_cache::colour
+    每个slab中有多少个不同的cache line
+end note
+
+
+class kmem_cache_node {
+        spinlock_t list_lock;
+
+        struct list_head slabs_partial; /* partial list first, better asm code CONFIG_SLAB*/
+        struct list_head slabs_full;
+        struct list_head slabs_free;
+        unsigned long total_slabs;      /* length of all slab lists */
+        unsigned long free_slabs;       /* length of free slab list only */
+        unsigned long free_objects;
+        unsigned int free_limit;
+        unsigned int colour_next;       /* Per-node cache coloring */
+        struct array_cache *shared;     /* shared per node */
+        struct alien_cache **alien;     /* on other nodes */
+        unsigned long next_reap;        /* updated without locking */
+        int free_touched;               /* updated without locking */
+
+        unsigned long nr_partial;  /* CONFIG_SLAB */
+        struct list_head partial;
+}
+
+note left of kmem_cache_node::slabs_partial
+    部分空闲的slab链表
+end note
+
+note left of kmem_cache_node::slabs_full
+    满slab链表
+end note
+
+note left of kmem_cache_node::slabs_free
+    空闲的slab链表
+end note
+
+note left of kmem_cache_node::total_slabs
+    slab数量
+end note
+
+
+note left of kmem_cache_node::free_objects
+    空闲对象的数量
+end note
+
+
+
+class array_cache {
+        unsigned int avail;
+        unsigned int limit;
+        unsigned int batchcount;
+        unsigned int touched;
+        void *entry[];
+}
+
+note right of array_cache::avail
+    数组entry可用对象的数量
+end note
+
+note right of array_cache::limit
+    数组entry的大小
+end note
+
+class alien_cache {
+        spinlock_t lock;
+        struct array_cache ac;
+}
+
+class page {
+    unsigned long flags;            /* Atomic flags, some possibly updated asynchronously */
+
+    struct list_head lru;
+    struct address_space *mapping;
+    pgoff_t index;          /* Our offset within mapping. */
+
+    unsigned long private;
+
+    struct rcu_head rcu_head;
+
+    struct kmem_cache *slab_cache; /* not slob */
+
+    void *freelist;         /* first free object */
+    void *s_mem;    /* slab: first object */
+
+    unsigned int active;            /* SLAB */
+s
+    atomic_t _refcount; 
+}
+
+note top: page对应一个物理页
+
+note left of page::lru
+    lru加入链表
+end note
+
+note left of page::s_mem
+    slab第一个对象的地址
+end note
+
+note left of page::freelist
+    空闲对象链表
+end note
+
+note left of page::active
+    已分配对象的数量
+end note
+
+
+page::lru --> kmem_cache_node::slabs_partial
+
+kmem_cache::cpu_cache --* array_cache
+kmem_cache::node --* kmem_cache_node
+
+page::slab_cache --* kmem_cache
+kmem_cache_node::shared -right-* array_cache
+
+kmem_cache_node::alien --* alien_cache
+
+alien_cache::ac --* array_cache
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
