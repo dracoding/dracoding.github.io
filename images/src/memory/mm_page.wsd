@@ -120,6 +120,34 @@ note left of zoneref::zone_idx
 end note
 
 
+class free_area {
+        struct list_head        free_list[MIGRATE_TYPES];
+        unsigned long           nr_free;
+}
+
+
+class page {
+    unsigned long flags;            /* Atomic flags, some possibly updated asynchronously */
+
+    struct list_head lru;
+    struct address_space *mapping;
+    pgoff_t index;          /* Our offset within mapping. */
+
+    unsigned long private;
+
+    struct rcu_head rcu_head;
+
+    struct kmem_cache *slab_cache; /* not slob */
+
+    void *freelist;         /* first free object */
+    void *s_mem;    /* slab: first object */
+
+    unsigned int active;            /* SLAB */
+
+    atomic_t _refcount; 
+}
+
+
 class alloc_context {
     struct zonelist *zonelist;
     nodemask_t *nodemask;
@@ -134,7 +162,6 @@ note top: 内存分配的上下文
 
 
 
-' zone::zone_pgdat --> pglist_data
 
 pglist_data::node_zones --* zone
 pglist_data::node_zonelists -left-* zonelist
@@ -144,11 +171,9 @@ zoneref::zone --* zone
 alloc_context::zonelist -right-* zonelist
 alloc_context::preferred_zoneref --* zoneref
 
+zone::free_area -right-* free_area
 
-
-
-
-
+free_area::free_list -right-> page::lru
 
 
 
