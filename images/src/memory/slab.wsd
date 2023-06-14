@@ -66,6 +66,10 @@ note right of kmem_cache::colour
     每个slab中有多少个不同的cache line
 end note
 
+note right of kmem_cache::node
+    slab节点, numa系统的个数
+end note
+
 
 class kmem_cache_node {
         spinlock_t list_lock;
@@ -88,15 +92,15 @@ class kmem_cache_node {
 }
 
 note left of kmem_cache_node::slabs_partial
-    部分空闲的slab链表
+    每个slab的object对象部分分配完了
 end note
 
 note left of kmem_cache_node::slabs_full
-    满slab链表
+    每个slab的object对象已经分配完了
 end note
 
 note left of kmem_cache_node::slabs_free
-    空闲的slab链表
+    每个slab的object对象未分配
 end note
 
 note left of kmem_cache_node::total_slabs
@@ -134,12 +138,13 @@ class alien_cache {
 class page {
     unsigned long flags;            /* Atomic flags, some possibly updated asynchronously */
 
+    struct list_head slab_list;
     struct list_head lru;
+
     struct address_space *mapping;
     pgoff_t index;          /* Our offset within mapping. */
 
     unsigned long private;
-
     struct rcu_head rcu_head;
 
     struct kmem_cache *slab_cache; /* not slob */
@@ -148,7 +153,7 @@ class page {
     void *s_mem;    /* slab: first object */
 
     unsigned int active;            /* SLAB */
-s
+
     atomic_t _refcount; 
 }
 
@@ -171,13 +176,13 @@ note left of page::active
 end note
 
 
-page::lru --> kmem_cache_node::slabs_partial
+' page::lru --> kmem_cache_node::slabs_partial
 
 kmem_cache::cpu_cache --* array_cache
 kmem_cache::node --* kmem_cache_node
 
-page::slab_cache --* kmem_cache
-kmem_cache_node::shared -right-* array_cache
+page::slab_cache -right-* kmem_cache
+kmem_cache_node::shared --* array_cache
 
 kmem_cache_node::alien --* alien_cache
 

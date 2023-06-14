@@ -1,0 +1,205 @@
+@startuml
+' left to right direction
+
+class kmem_cache {
+        struct kmem_cache_cpu __percpu *cpu_slab;
+        slab_flags_t flags;
+        unsigned long min_partial;
+        unsigned int size;      /* The size of an object including metadata */
+        unsigned int object_size;/* The size of an object without metadata */
+        struct reciprocal_value reciprocal_size;
+        unsigned int offset;    /* Free pointer offset */
+
+        unsigned int cpu_partial;    // CONFIG_SLUB_CPU_PARTIAL
+
+        struct kmem_cache_order_objects oo;
+
+        struct kmem_cache_order_objects max;
+        struct kmem_cache_order_objects min;
+        gfp_t allocflags;       /* gfp flags to use on each alloc */
+        int refcount;           /* Refcount for slab cache destroy */
+        void (*ctor)(void *);
+        unsigned int inuse;             /* Offset to metadata */
+        unsigned int align;             /* Alignment */
+        unsigned int red_left_pad;      /* Left redzone padding size */
+        const char *name;       /* Name (only for display!) */
+        struct list_head list;  /* List of slab caches */
+
+        struct kobject kobj;    /* For sysfs CONFIG_SYSFS*/
+
+        unsigned int remote_node_defrag_ratio;    // CONFIG_NUMA
+
+        unsigned int useroffset;        /* Usercopy region offset */
+        unsigned int usersize;          /* Usercopy region size */
+
+        struct kmem_cache_node *node[MAX_NUMNODES];
+
+}
+
+note top: slab描述符,内存缓存
+
+note right of kmem_cache::cpu_slab
+    每个处理器的cache, 用于缓存刚刚释放的对象
+end note
+
+note right of kmem_cache::min_partial
+    node节点partial链表最小对象的数量
+end note
+
+note right of kmem_cache::cpu_partial
+    per cpu节点partial链表最小对象的数量
+end note
+
+note right of kmem_cache::size
+    对象的长度
+end note
+
+note right of kmem_cache::object_size
+    对象的原始长度
+end note
+
+note right of kmem_cache::offset
+    空闲对象的偏移
+end note
+
+note right of kmem_cache::oo
+    剩余部分最小的slab的
+end note
+
+note right of kmem_cache::min
+    最小的slab的
+end note
+
+note right of kmem_cache::node
+    slab节点, numa系统的个数
+end note
+
+class kmem_cache_order_objects {
+        unsigned int x;
+}
+
+note right of kmem_cache_order_objects::x
+    低16位为对象数, 高16位为对象的阶数
+end note
+
+
+class kmem_cache_cpu {
+        void **freelist;        /* Pointer to next available object */
+        unsigned long tid;      /* Globally unique transaction id */
+        struct page *page;      /* The slab from which we are allocating */
+        struct page *partial;   /* Partially allocated frozen slabs */
+        unsigned stat[NR_SLUB_STAT_ITEMS];
+}
+
+note right of kmem_cache_cpu::freelist
+    空闲对象链表
+end note
+
+note right of kmem_cache_cpu::page
+    当前使用的page
+end note
+
+note right of kmem_cache_cpu::partial
+    部分空闲对象链表
+end note
+
+
+class kmem_cache_node {
+        spinlock_t list_lock;
+
+        unsigned long nr_partial;
+        struct list_head partial;
+
+        atomic_long_t nr_slabs;
+        atomic_long_t total_objects;
+        struct list_head full;
+
+}
+
+note left of kmem_cache_node::nr_partial
+    部分空闲slab的数量
+end note
+
+note left of kmem_cache_node::partial
+    部分空闲slab的链表
+end note
+
+note left of kmem_cache_node::slabs_free
+    每个slab的object对象未分配
+end note
+
+note left of kmem_cache_node::total_slabs
+    slab数量
+end note
+
+note left of kmem_cache_node::free_objects
+    空闲对象的数量
+end note
+
+
+class page {
+    unsigned long flags;            /* Atomic flags, some possibly updated asynchronously */
+
+    struct list_head slab_list;
+    struct list_head lru;
+
+    struct rcu_head rcu_head;
+
+    struct kmem_cache *slab_cache; /* not slob */
+
+    void *freelist;         /* first free object */
+    unsigned long counters;         /* SLUB */
+    unsigned inuse:16;
+    unsigned objects:15;
+    unsigned frozen:1;
+
+    atomic_t _refcount; 
+}
+
+note top: page对应一个物理页
+
+note left of page::lru
+    lru加入slab链表
+end note
+
+note left of page::freelist
+    空闲对象链表
+end note
+
+note left of page::inuse
+    已分配对象的数量
+end note
+
+note left of page::objects
+    对象的数量
+end note
+
+note left of page::frozen
+    已分配对象的数量
+end note
+
+
+
+' page::lru --> kmem_cache_node::slabs_partial
+
+kmem_cache::cpu_slab --* kmem_cache_cpu
+kmem_cache::node --* kmem_cache_node
+
+page::slab_cache -right-* kmem_cache
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

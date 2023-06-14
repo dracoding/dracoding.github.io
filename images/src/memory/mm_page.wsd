@@ -160,8 +160,28 @@ class alloc_context {
 
 note top: 内存分配的上下文
 
+enum migratetype {
+        MIGRATE_UNMOVABLE,
+        MIGRATE_MOVABLE,
+        MIGRATE_RECLAIMABLE,
+        MIGRATE_PCPTYPES,       /* the number of types on the pcp lists */
+        MIGRATE_HIGHATOMIC = MIGRATE_PCPTYPES,
+        MIGRATE_CMA,
+        MIGRATE_ISOLATE,        /* can't allocate from here */
+        MIGRATE_TYPES,
+}
 
+enum zone_type {
+        ZONE_DMA,     // CONFIG_ZONE_DMA
+        ZONE_DMA32,    // CONFIG_ZONE_DMA32
+        ZONE_NORMAL,
 
+        ZONE_HIGHMEM,         // CONFIG_HIGHMEM
+
+        ZONE_MOVABLE,
+        ZONE_DEVICE,      // CONFIG_ZONE_DEVICE
+        __MAX_NR_ZONES
+}
 
 pglist_data::node_zones --* zone
 pglist_data::node_zonelists -left-* zonelist
@@ -170,6 +190,8 @@ zoneref::zone --* zone
 
 alloc_context::zonelist -right-* zonelist
 alloc_context::preferred_zoneref --* zoneref
+alloc_context::migratetype --* migratetype
+alloc_context::highest_zoneidx --* zone_type
 
 zone::free_area -right-* free_area
 
