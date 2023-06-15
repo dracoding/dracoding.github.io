@@ -38,39 +38,39 @@ class kmem_cache {
 
 note top: slab描述符,内存缓存
 
-note right of kmem_cache::cpu_slab
+note left of kmem_cache::cpu_slab
     每个处理器的cache, 用于缓存刚刚释放的对象
 end note
 
-note right of kmem_cache::min_partial
+note left of kmem_cache::min_partial
     node节点partial链表最小对象的数量
 end note
 
-note right of kmem_cache::cpu_partial
+note left of kmem_cache::cpu_partial
     per cpu节点partial链表最小对象的数量
 end note
 
-note right of kmem_cache::size
+note left of kmem_cache::size
     对象的长度
 end note
 
-note right of kmem_cache::object_size
+note left of kmem_cache::object_size
     对象的原始长度
 end note
 
-note right of kmem_cache::offset
+note left of kmem_cache::offset
     空闲对象的偏移
 end note
 
-note right of kmem_cache::oo
+note left of kmem_cache::oo
     剩余部分最小的slab的
 end note
 
-note right of kmem_cache::min
+note left of kmem_cache::min
     最小的slab的
 end note
 
-note right of kmem_cache::node
+note left of kmem_cache::node
     slab节点, numa系统的个数
 end note
 
@@ -182,10 +182,11 @@ end note
 
 ' page::lru --> kmem_cache_node::slabs_partial
 
-kmem_cache::cpu_slab --* kmem_cache_cpu
+kmem_cache::cpu_slab -right-* kmem_cache_cpu
 kmem_cache::node --* kmem_cache_node
+kmem_cache::oo --* kmem_cache_order_objects
 
-page::slab_cache -right-* kmem_cache
+page::slab_cache --* kmem_cache
 
 
 
