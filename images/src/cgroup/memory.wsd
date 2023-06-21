@@ -1,0 +1,218 @@
+@startuml
+' left to right direction
+
+class mem_cgroup {
+        struct cgroup_subsys_state css;
+        struct mem_cgroup_id id;
+
+        struct page_counter memory;             /* Both v1 & v2 */
+
+        union {
+                struct page_counter swap;       /* v2 only */
+                struct page_counter memsw;      /* v1 only */
+        };
+
+        struct page_counter kmem;               /* v1 only */
+        struct page_counter tcpmem;             /* v1 only */
+        struct work_struct high_work;
+
+        unsigned long soft_limit;
+        struct vmpressure vmpressure;
+        bool use_hierarchy;
+
+        bool oom_group;
+
+        bool oom_lock;
+        int under_oom;
+        int swappiness;
+        int oom_kill_disable;
+
+        struct cgroup_file events_file;
+        struct cgroup_file events_local_file;
+        struct cgroup_file swap_events_file;
+
+        struct mutex thresholds_lock;
+        struct mem_cgroup_thresholds thresholds;
+        struct mem_cgroup_thresholds memsw_thresholds;
+
+        struct list_head oom_notify;
+
+        unsigned long move_charge_at_immigrate;
+        spinlock_t              move_lock;
+        unsigned long           move_lock_flags;
+
+        struct memcg_vmstats    vmstats;
+
+        atomic_long_t           memory_events[MEMCG_NR_MEMORY_EVENTS];
+        atomic_long_t           memory_events_local[MEMCG_NR_MEMORY_EVENTS];
+
+        unsigned long socket_pressure;
+        bool tcpmem_active;
+        int tcpmem_pressure;
+
+        atomic_t moving_account;
+        struct task_struct      *move_lock_task;
+        struct memcg_vmstats_percpu __percpu *vmstats_percpu;
+
+        struct list_head event_list;
+        spinlock_t event_list_lock;
+
+        int high_async_ratio;
+        bool high_async_reclaim;
+        struct lru_gen_mm_list mm_list;
+        struct mem_cgroup_per_node *nodeinfo[0];
+}
+
+note left of mem_cgroup::css
+    资源控制器的基类
+end note
+
+note left of mem_cgroup::memory
+    内存计数器
+end note
+
+note left of mem_cgroup::swap
+    交换区计数器
+end note
+
+note left of mem_cgroup::kmem
+    内核内存计数器
+end note
+
+note left of mem_cgroup::tcpmem
+    tcp缓冲区计数器
+end note
+
+
+class page_counter {
+        atomic_long_t usage; 
+        unsigned long min;
+        unsigned long low;
+        unsigned long high;
+        unsigned long max;
+        struct page_counter *parent;
+
+        unsigned long emin;
+        atomic_long_t min_usage;
+        atomic_long_t children_min_usage;
+
+        unsigned long elow;
+        atomic_long_t low_usage; 
+        atomic_long_t children_low_usage;
+
+        unsigned long watermark;
+        unsigned long failcnt;
+}
+
+note left of page_counter::watermark
+    计数值的历史最大值
+end note
+
+note left of page_counter::failcnt
+    命中限制的次数
+end note
+
+class mem_cgroup_per_node {
+        struct lruvec           lruvec;
+
+        struct lruvec_stats_percpu __percpu     *lruvec_stats_percpu;
+        struct lruvec_stats                     lruvec_stats;
+
+        unsigned long           lru_zone_size[MAX_NR_ZONES][NR_LRU_LISTS];
+
+        struct mem_cgroup_reclaim_iter  iter;
+
+        struct shrinker_info __rcu      *shrinker_info;
+
+        struct rb_node          tree_node;      /* RB tree node */
+        unsigned long           usage_in_excess;/* Set to the value by which the soft limit is exceeded*/
+        bool                    on_tree;
+        struct mem_cgroup       *memcg;         /* Back pointer, we cannot use container_of        */
+}
+
+note left of mem_cgroup_per_node::usage_in_excess
+    内存使用量超过软限制的数值
+end note
+
+note left of mem_cgroup_per_node::on_tree
+    命中限制的次数
+end note
+
+
+note left of task_struct::mm
+    进程指向的内存描述符， 内核线程时， 为null
+end note
+
+note left of task_struct::active_mm
+    用户线程时和mm指向同一个内存描述符, 内核线程是没有运行指向null, 运行时指向从上一个进程借用的内存描述符
+end note
+
+note left of task_struct::vmacache
+    最近访问的vma列表
+end note
+
+
+class task_struct {
+    struct css_set __rcu            *cgroups;
+
+    struct list_head                cg_list;
+}
+
+note left of task_struct::cgroups
+    进程指向的内存描述符， 内核线程时， 为null
+end note
+
+note left of task_struct::active_mm
+    用户线程时和mm指向同一个内存描述符, 内核线程是没有运行指向null, 运行时指向从上一个进程借用的内存描述符
+end note
+
+note left of task_struct::vmacache
+    最近访问的vma列表
+end note
+
+class css_set {
+    struct cgroup_subsys_state *subsys[CGROUP_SUBSYS_COUNT]
+    refcount_t refcount
+    css_set *dom_cset
+    struct cgroup *dfl_cgrp
+    struct list_head tasks
+}
+
+class cgroup_subsys_state {
+    struct cgroup *cgroup;
+        struct cgroup_subsys* ss
+        struct percpu_ref refcnt
+        struct list_head sibling
+        struct list_head children
+        struct list_head rstat_css_node
+        int id
+        unsigned int flags
+        u64 serial_nr
+        atomic_t online_cnt
+        struct work_struct destroy_work
+        struct rcu_work destroy_rwork
+        struct cgroup_subsys_state *parent;
+}
+note top: 代表进程与一个特定子系统相关的信息
+
+
+class page {
+    unsigned long memcg_data;
+}
+
+mem_cgroup::memory --* page_counter
+mem_cgroup::nodeinfo --* mem_cgroup_per_node
+
+mem_cgroup::css -right-* cgroup_subsys_state
+
+mem_cgroup_per_node::memcg --* mem_cgroup
+
+
+task_struct::cgroups --* css_set
+css_set::subsys --* cgroup_subsys_state
+
+page::memcg_data --* mem_cgroup
+
+
+
+

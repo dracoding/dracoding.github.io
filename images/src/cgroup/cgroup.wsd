@@ -14,6 +14,8 @@ class cgroup {
     int level
     int max_depth
     struct cgroup_subsys_state __rcu *subsys[CGROUP_SUBSYS_COUNT]
+    struct cgroup_root *root;
+
     struct list_head cset_links
     struct list_head cgrp_links
 }
@@ -24,38 +26,64 @@ end note
 
 class cgroup_subsys_state {
     struct cgroup *cgroup;
-        struct cgroup_subsys* ss
-        struct percpu_ref refcnt
-        struct list_head sibling
-        struct list_head children
-        struct list_head rstat_css_node
-        int id
-        unsigned int flags
-        u64 serial_nr
-        atomic_t online_cnt
-        struct work_struct destroy_work
-        struct rcu_work destroy_rwork
-        struct cgroup_subsys_state *parent;
+    struct cgroup_subsys *ss;
+    struct percpu_ref refcnt;
+    struct list_head sibling;
+    struct list_head children;
+    struct list_head rstat_css_node;
+    int id;
+    unsigned int flags;
+    u64 serial_nr;
+    atomic_t online_cnt;
+    struct work_struct destroy_work;
+    struct rcu_work destroy_rwork;
+    struct cgroup_subsys_state *parent;
 }
+
 note top: 代表进程与一个特定子系统相关的信息
 
 class cgroup_subsys {
-    int (*css_online)(struct cgroup_subsys_state *css)
-    void (*css_offline)(struct cgroup_subsys_state *css)
-    void (*css_released)(struct cgroup_subsys_state *css)
-    void (*css_free)(struct cgroup_subsys_state *css)
-    struct cgroup_root *root
+    int (*css_online)(struct cgroup_subsys_state *css);
+    void (*css_offline)(struct cgroup_subsys_state *css);
+    void (*css_released)(struct cgroup_subsys_state *css);
+    void (*css_free)(struct cgroup_subsys_state *css);
+    struct cgroup_root *root;
+
+    struct cftype *dfl_cftypes;     /* for the default hierarchy */
+    struct cftype *legacy_cftypes;  /* for the legacy hierarchies */
+    struct cftype *base_cftypes;
 }
-note right: cgroup子系统的通用接口，如cpuset、memory、freezer等
+note right: cgroup子系统的通用接口,如cpuset、memory、freezer等
 
 
 class css_set {
-    struct cgroup_subsys_state *subsys[CGROUP_SUBSYS_COUNT]
-    refcount_t refcount
-    css_set *dom_cset
-    struct cgroup *dfl_cgrp
-    struct list_head tasks
+        struct cgroup_subsys_state *subsys[CGROUP_SUBSYS_COUNT];
+        refcount_t refcount;
+
+        struct css_set *dom_cset;
+        struct cgroup *dfl_cgrp;
+        int nr_tasks;
+
+        struct list_head tasks;
+        struct list_head mg_tasks;
+        struct list_head dying_tasks;
+        struct list_head task_iters;
+        struct list_head e_cset_node[CGROUP_SUBSYS_COUNT];
+        struct list_head threaded_csets;
+        struct list_head threaded_csets_node;
+        struct hlist_node hlist;
+        struct list_head cgrp_links;
+        struct list_head mg_preload_node;
+        struct list_head mg_node;
+
+        struct cgroup *mg_src_cgrp;
+        struct cgroup *mg_dst_cgrp;
+        struct css_set *mg_dst_cset;
+
+        bool dead;
+        struct rcu_head rcu_head;
 }
+
 
 note right of css_set::subsys
     包含的子系统初始化后不可更改
@@ -71,24 +99,144 @@ end note
 
 
 class cgrp_cset_link {
-        struct cgroup           *cgrp;
-        struct css_set          *cset;
-        struct list_head        cset_link;
-        struct list_head        cgrp_link;
+    struct cgroup *cgrp;
+    struct css_set *cset;
+    struct list_head cset_link;
+    struct list_head cgrp_link;
 }
 
 
+class cftype {
+        char name[MAX_CFTYPE_NAME];
+        unsigned long private;
 
-task_struct::cgroups *-- css_set
-cgroup::self *-- cgroup_subsys_state
-cgroup_subsys_state::cgroup *-- cgroup
+        size_t max_write_len;
+        unsigned int flags;
 
-cgroup_subsys_state::ss <|-- cgroup_subsys
+        unsigned int file_offset;
 
-css_set::subsys <=-- cgroup_subsys
+        struct cgroup_subsys *ss;       /* NULL for cgroup core files */
+        struct list_head node;          /* anchored at ss->cfts */
+        struct kernfs_ops *kf_ops;
 
-cgrp_cset_link::cgrp <|-- cgroup
-cgrp_cset_link::cset <|-- css_set 
+        int (*open)(struct kernfs_open_file *of);
+        void (*release)(struct kernfs_open_file *of);
+        u64 (*read_u64)(struct cgroup_subsys_state *css, struct cftype *cft);
+        s64 (*read_s64)(struct cgroup_subsys_state *css, struct cftype *cft);
+        int (*seq_show)(struct seq_file *sf, void *v);
+        void *(*seq_start)(struct seq_file *sf, loff_t *ppos);
+        void *(*seq_next)(struct seq_file *sf, void *v, loff_t *ppos);
+        void (*seq_stop)(struct seq_file *sf, void *v);
+        int (*write_u64)(struct cgroup_subsys_state *css, struct cftype *cft, u64 val);
+        int (*write_s64)(struct cgroup_subsys_state *css, struct cftype *cft, s64 val);
+        ssize_t (*write)(struct kernfs_open_file *of, char *buf, size_t nbytes, loff_t off);
+        int (*read_seq_string)(struct cgroup *cont, struct cftype *cft, struct seq_file *m);
+        int (*write_string)(struct cgroup *cgrp, struct cftype *cft, const char *buffer);
+        __poll_t (*poll)(struct kernfs_open_file *of, struct poll_table_struct *pt);
+}
+note top: cgroup子系统下文件的操作集合
 
+
+class cgroup_root {
+        struct kernfs_root *kf_root;
+        unsigned int subsys_mask;
+
+        int hierarchy_id;
+        struct cgroup cgrp;
+        u64 cgrp_ancestor_id_storage;
+                                           
+        atomic_t nr_cgrps;                 
+
+        wait_queue_head_t wait;
+        struct list_head root_list;
+
+        unsigned int flags;
+        char release_agent_path[PATH_MAX];
+        char name[MAX_CGROUP_ROOT_NAMELEN];
+}
+note top: cgroup的根目录
+
+
+class kernfs_root {
+        struct kernfs_node *kn;
+        unsigned int flags;  /* KERNFS_ROOT_* flags */
+
+        struct idr ino_idr;
+        u32 last_id_lowbits;
+        u32 id_highbits;
+        struct kernfs_syscall_ops *syscall_ops;
+
+        struct list_head supers;
+        wait_queue_head_t deactivate_waitq;
+}
+
+note left of kernfs_root::syscall_ops
+    目录操作的集合
+end note
+
+class kernfs_node {
+        atomic_t count;
+        atomic_t active;
+
+        struct kernfs_node      *parent;
+        const char *name;
+
+        struct rb_node rb;
+
+        const void *ns;    /* namespace tag */
+        unsigned int hash;   /* ns + name hash */
+        void *priv;
+ 
+        u64 id;
+
+        unsigned short flags;
+        umode_t mode;
+        struct kernfs_iattrs    *iattr;
+}
+
+note left of kernfs_node::priv
+    目录操作的集合
+end note
+
+
+class cgroup_fs_context {
+        struct kernfs_fs_context kfc;
+        struct cgroup_root      *root;
+        struct cgroup_namespace *ns;
+        unsigned int    flags;                  /* CGRP_ROOT_* flags */
+
+        /* cgroup1 bits */
+        bool cpuset_clone_children;
+        bool none;                   /* User explicitly requested empty subsystem */
+        bool all_ss;                 /* Seen 'all' option */
+        u16 subsys_mask;            /* Selected subsystems */
+        char *name;                  /* Hierarchy name */
+        char *release_agent;         /* Path for release notifications */
+}
+note top: cgroup文件系统创建或下载的上下文
+
+
+task_struct::cgroups --* css_set
+
+css_set::subsys --=> cgroup_subsys_state
+cgroup::self --* cgroup_subsys_state
+cgroup::root --> cgroup_root
+
+cgroup_subsys_state::cgroup --> cgroup
+cgroup_subsys_state::ss --> cgroup_subsys
+
+cgrp_cset_link::cgrp --|> cgroup
+cgrp_cset_link::cset --|> css_set 
+
+cftype <-- cgroup_subsys::base_cftypes
+cftype::ss --> cgroup_subsys
+
+cgroup_root::cgrp -left-* cgroup
+cgroup_root::kf_root --> kernfs_root
+
+
+kernfs_root::kn --> kernfs_node
+
+cgroup_fs_context::root --> cgroup_root
 
 @enduml
