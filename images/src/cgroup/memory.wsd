@@ -116,18 +116,17 @@ class mem_cgroup_per_node {
         struct lruvec           lruvec;
 
         struct lruvec_stats_percpu __percpu     *lruvec_stats_percpu;
-        struct lruvec_stats                     lruvec_stats;
+        struct lruvec_stats lruvec_stats;
 
         unsigned long           lru_zone_size[MAX_NR_ZONES][NR_LRU_LISTS];
 
         struct mem_cgroup_reclaim_iter  iter;
-
         struct shrinker_info __rcu      *shrinker_info;
 
-        struct rb_node          tree_node;      /* RB tree node */
-        unsigned long           usage_in_excess;/* Set to the value by which the soft limit is exceeded*/
-        bool                    on_tree;
-        struct mem_cgroup       *memcg;         /* Back pointer, we cannot use container_of        */
+        struct rb_node tree_node;      /* RB tree node */
+        unsigned long usage_in_excess;/* Set to the value by which the soft limit is exceeded*/
+        bool on_tree;
+        struct mem_cgroup *memcg;         /* Back pointer, we cannot use container_of        */
 }
 
 note left of mem_cgroup_per_node::usage_in_excess
@@ -139,36 +138,20 @@ note left of mem_cgroup_per_node::on_tree
 end note
 
 
-note left of task_struct::mm
-    进程指向的内存描述符， 内核线程时， 为null
-end note
-
-note left of task_struct::active_mm
-    用户线程时和mm指向同一个内存描述符, 内核线程是没有运行指向null, 运行时指向从上一个进程借用的内存描述符
-end note
-
-note left of task_struct::vmacache
-    最近访问的vma列表
-end note
-
-
 class task_struct {
-    struct css_set __rcu            *cgroups;
+    struct css_set __rcu *cgroups;
 
-    struct list_head                cg_list;
+    struct list_head cg_list;
 }
 
 note left of task_struct::cgroups
     进程指向的内存描述符， 内核线程时， 为null
 end note
 
-note left of task_struct::active_mm
-    用户线程时和mm指向同一个内存描述符, 内核线程是没有运行指向null, 运行时指向从上一个进程借用的内存描述符
+note left of task_struct::cg_list
+    所有使用此css_set 结构的进程列表
 end note
 
-note left of task_struct::vmacache
-    最近访问的vma列表
-end note
 
 class css_set {
     struct cgroup_subsys_state *subsys[CGROUP_SUBSYS_COUNT]
@@ -176,22 +159,25 @@ class css_set {
     css_set *dom_cset
     struct cgroup *dfl_cgrp
     struct list_head tasks
+
+    struct list_head mg_tasks;
+    struct list_head dying_tasks;
 }
 
 class cgroup_subsys_state {
     struct cgroup *cgroup;
-        struct cgroup_subsys* ss
-        struct percpu_ref refcnt
-        struct list_head sibling
-        struct list_head children
-        struct list_head rstat_css_node
-        int id
-        unsigned int flags
-        u64 serial_nr
-        atomic_t online_cnt
-        struct work_struct destroy_work
-        struct rcu_work destroy_rwork
-        struct cgroup_subsys_state *parent;
+    struct cgroup_subsys* ss
+    struct percpu_ref refcnt
+    struct list_head sibling
+    struct list_head children
+    struct list_head rstat_css_node
+    int id
+    unsigned int flags
+    u64 serial_nr
+    atomic_t online_cnt
+    struct work_struct destroy_work
+    struct rcu_work destroy_rwork
+    struct cgroup_subsys_state *parent;
 }
 note top: 代表进程与一个特定子系统相关的信息
 
@@ -201,15 +187,15 @@ class page {
 }
 
 mem_cgroup::memory --* page_counter
-mem_cgroup::nodeinfo --* mem_cgroup_per_node
+mem_cgroup::nodeinfo --> mem_cgroup_per_node
 
 mem_cgroup::css -right-* cgroup_subsys_state
 
-mem_cgroup_per_node::memcg --* mem_cgroup
+mem_cgroup_per_node::memcg --> mem_cgroup
 
 
-task_struct::cgroups --* css_set
-css_set::subsys --* cgroup_subsys_state
+task_struct::cgroups --> css_set
+css_set::subsys --> cgroup_subsys_state
 
 page::memcg_data --* mem_cgroup
 
