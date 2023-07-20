@@ -1,0 +1,283 @@
+@startuml
+
+class dentry {
+        unsigned int d_flags;           /* protected by d_lock */
+        seqcount_spinlock_t d_seq;      /* per dentry seqlock */
+        struct hlist_bl_node d_hash;    /* lookup hash list */
+        struct dentry *d_parent;        /* parent directory */
+        struct qstr d_name;
+        struct inode *d_inode;          /* Where the name belongs to - NULL is negative */
+        unsigned char d_iname[DNAME_INLINE_LEN];        /* small names */
+
+        struct lockref d_lockref;       /* per-dentry lock and refcount */
+        const struct dentry_operations *d_op;
+        struct super_block *d_sb;       /* The root of the dentry tree */
+        unsigned long d_time;           /* used by d_revalidate */
+        void *d_fsdata;                 /* fs-specific data */
+
+        struct list_head d_lru;         /* LRU list */
+        wait_queue_head_t *d_wait;      /* in-lookup ones only */
+
+        struct list_head d_child;       /* child of parent list */
+        struct list_head d_subdirs;     /* our children */
+
+        union {
+                struct hlist_node d_alias;      /* inode alias list */
+                struct hlist_bl_node d_in_lookup_hash;  /* only for in-lookup ones */
+                struct rcu_head d_rcu;
+        } d_u;
+        atomic_t d_neg_dnum;                 /* negative dentry under this dentry, if it's dir */
+
+}
+
+note top: 描述文件的逻辑属性， 存在于内存
+
+note left of dentry::d_inode
+    与目录项关联的inode
+end note
+
+note left of dentry::d_fsdata
+    文件系统私有数据
+end note
+
+note left of dentry::d_lru
+    最近未使用的目录项的链表
+end note
+
+note left of dentry::d_child
+    加入父目录项的d_subdirs中
+end note
+
+class nameidata {
+        struct path     path;
+        struct qstr     last;
+        struct path     root;
+        struct inode    *inode; /* path.dentry.d_inode */
+        unsigned int    flags, state;
+        unsigned        seq, m_seq, r_seq;
+        int             last_type;
+        unsigned        depth;
+        int             total_link_count;
+        struct saved {
+                struct path link;
+                struct delayed_call done;
+                const char *name;
+                unsigned seq;
+        } *stack, internal[EMBEDDED_LEVELS];
+        struct filename *name;
+        struct nameidata *saved;
+        unsigned root_seq;
+        int dfd; 
+        kuid_t dir_uid;
+        umode_t dir_mode;
+}
+
+note right of nameidata::name
+    当前路径
+end note
+
+note right of nameidata::name
+    文件名
+end note
+
+note right of nameidata::dfd
+    文件所在目录的fd, 当前目录为AT_FDCWD
+end note
+
+class address_space {
+        struct inode *host;
+        struct xarray i_pages;
+        gfp_t gfp_mask;
+        atomic_t i_mmap_writable;
+        struct rb_root_cached   i_mmap;
+        struct rw_semaphore     i_mmap_rwsem;
+        unsigned long nrpages;
+        pgoff_t writeback_index;
+        const struct address_space_operations *a_ops;
+        unsigned long flags;
+        errseq_t wb_err;
+        spinlock_t private_lock;
+        struct list_head private_list;
+        void *private_data;
+}
+
+note top: 于描述页高速缓存中的页面的。一个文件对应一个address_space, 一个address_space和一个偏移量可以确定一个页高速缓存中的页面
+
+class xarray {
+        spinlock_t      xa_lock;
+        gfp_t           xa_flags;
+        void __rcu *    xa_head;
+}
+
+
+class file {
+        union {
+                struct llist_node       fu_llist;
+                struct rcu_head         fu_rcuhead;
+        } f_u;
+        struct path f_path;
+        struct inode *f_inode;       /* cached value */
+        const struct file_operations    *f_op;
+
+        spinlock_t f_lock;
+        enum rw_hint f_write_hint;
+        atomic_long_t f_count;
+        unsigned int f_flags;
+        fmode_t f_mode;
+        struct mutex f_pos_lock;
+        loff_t f_pos;
+        struct fown_struct f_owner;
+        const struct cred *f_cred;
+        struct file_ra_state f_ra;
+
+        u64 f_version;
+        void *private_data;
+
+        struct address_space    *f_mapping;
+        errseq_t f_wb_err;
+        errseq_t f_sb_err; /* for syncfs */
+}
+
+note right of file::f_op
+    文件操作的方法集合
+end note
+
+note right of file::f_flags
+    打开文件时指定的标识
+end note
+
+note right of file::f_mode
+    文件的访问模式
+end note
+
+note right of file::f_pos
+    目前文件相对文件头的偏移
+end note
+
+class file_ra_state {
+        pgoff_t start;                  /* where readahead started */
+        unsigned int size;              /* # of readahead pages */
+        unsigned int async_size;        /* do asynchronous readahead when
+                                           there are only # of pages ahead */
+
+        unsigned int ra_pages;          /* Maximum readahead window */
+        unsigned int mmap_miss;         /* Cache miss stat for mmap accesses */
+        loff_t prev_pos;                /* Cache last read() position */
+}
+
+note top: 文件预读相关信息 
+
+struct inode {
+        umode_t i_mode;
+        unsigned short i_opflags;
+        kuid_t i_uid;
+        kgid_t i_gid;
+        unsigned int i_flags;
+
+        const struct inode_operations   *i_op;
+        struct super_block      *i_sb;
+        struct address_space    *i_mapping;
+
+        unsigned long i_ino;
+
+        const unsigned int i_nlink;
+
+        dev_t i_rdev;
+        loff_t i_size;
+        struct timespec64       i_atime;
+        struct timespec64       i_mtime;
+        struct timespec64       i_ctime;
+        spinlock_t i_lock; /* i_blocks, i_bytes, maybe i_size */
+        unsigned short i_bytes;
+        u8 i_blkbits;
+        u8 i_write_hint;
+        blkcnt_t i_blocks;
+
+        seqcount_t i_size_seqcount;
+        unsigned long i_state;
+        struct rw_semaphore i_rwsem;
+        
+        unsigned long           dirtied_when;   /* jiffies of first dirtying */
+        unsigned long           dirtied_time_when;
+
+        struct hlist_node i_hash;
+        struct list_head i_io_list;      /* backing dev IO list */
+
+        struct list_head i_lru;          /* inode LRU list */
+        struct list_head i_sb_list;
+        struct list_head i_wb_list;      /* backing dev writeback list */
+        union {
+                struct hlist_head i_dentry;
+                struct rcu_head i_rcu;
+        };
+        atomic64_t i_version;
+        atomic64_t i_sequence; /* see futex */
+        atomic_t i_count;
+        atomic_t i_dio_count;
+        atomic_t i_writecount;
+
+        union {
+                const struct file_operations    *i_fop; /* former ->i_op->default_file_ops */
+                void (*free_inode)(struct inode *);
+        };
+        struct file_lock_context *i_flctx;
+        struct address_space i_data;
+        struct list_head i_devices;
+        union {
+                struct pipe_inode_info  *i_pipe;
+                struct block_device *i_bdev;
+                struct cdev *i_cdev;
+                char *i_link;
+                unsigned i_dir_seq;
+        };
+
+        __u32 i_generation;
+        void *i_private; /* fs or device private pointer */
+}
+
+note top: 文件的元数据信息（文件属性的描述）
+
+note left of inode::i_mapping
+    表示向谁请求页面
+end note
+
+note left of inode::i_ino
+    索引节点号,每个inode都是唯一的
+end note
+
+note left of inode::i_nlink
+    与该节点建立链接的文件数(硬链接数)
+end note
+
+note left of inode::i_rdev
+    实际的设备标识
+end note
+
+note left of inode::i_size
+    inode所代表的的文件的大小,以字节为单位
+end note
+
+note left of inode::i_bytes
+    文件中最后一个块的字节数
+end note
+
+note left of inode::i_blkbits
+    块大小，字节单位
+end note
+
+note left of inode::i_blocks
+    文件所占块数
+end note
+
+dentry::d_inode --> inode
+
+file::f_mapping --> address_space
+file::f_inode --> inode
+file::f_ra --* file_ra_state
+
+
+inode::i_mapping --> address_space
+address_space::host -left-> inode
+address_space::i_pages --* xarray
+
+@enduml

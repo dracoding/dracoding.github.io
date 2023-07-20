@@ -1,0 +1,35 @@
+@startuml
+
+(*) --> "open"
+
+--> "do_sys_open"
+--> "do_sys_openat2"
+
+--> ====B1====
+====B1==== --> "build_open_flags"
+====B1==== --> "get_unused_fd_flags"
+====B1==== --> "do_filp_open" as filp_open
+====B1==== --> "fd_install"
+
+filp_open --> "path_openat"
+
+if "" then
+    -left> [__O_TMPFILE] "do_tmpfile"
+else
+    -right> [O_PATH] "do_o_path"
+else
+    --> ====B2====
+endif
+
+ ====B2==== -left> "open_last_lookups" as open_lookup
+ ====B2==== -> "do_open"
+
+open_lookup -down> lookup_open
+
+do_open -> "vfs_open"
+--> "do_dentry_open"
+--> "f->f_op->open"
+note right: 对应file_operations的open函数， 如xfs_file_open,
+
+
+@enduml

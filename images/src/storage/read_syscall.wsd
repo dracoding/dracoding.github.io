@@ -1,0 +1,74 @@
+@startuml
+
+(*) --> "read"
+
+--> "ksys_read"
+--> "vfs_read"
+
+if "file->f_op->read" then
+    -left> "file->f_op->read"
+else
+    -> "new_sync_read" as read_iter
+endif
+
+
+read_iter --> "call_read_iter"
+--> "file->f_op->read_iter"
+note right: 对应file_operations的read_iter函数， 如xfs_file_read_iter
+
+--> [xfs] "xfs_file_read_iter"
+  
+if "" then
+    -left> [DAX] "xfs_file_dax_read"
+else
+    -down> [IOCB_DIRECT] "xfs_file_dio_aio_read"
+else
+    -right> "xfs_file_buffered_aio_read"
+endif
+
+--> "generic_file_read_iter"
+
+if "" then
+    -> [IOCB_DIRECT] "mapping->a_ops->direct_IO"
+    note right: 如xfs_address_space_operations
+else
+    -left> "generic_file_buffered_read"
+endif
+
+--> ====B1====
+====B1==== --> "generic_file_buffered_read_get_pages"
+====B1==== --> "copy_page_to_iter"
+
+generic_file_buffered_read_get_pages --> ====B2====
+====B2==== --> "(1)find_get_pages_contig"
+note right: 先读取缓存
+====B2==== --> "(2)page_cache_sync_readahead"
+note right: 进行预读
+--> "page_cache_sync_ra"
+--> "ondemand_readahead" as ondemand_readahead
+====B2==== --> "(3)generic_file_buffered_read_no_cached_page"
+--> "generic_file_buffered_read_readpage"
+--> "mapping->a_ops->readpage" as a_ops_read_page
+====B2==== --> "(4)page_cache_async_readahead"
+note right: 发起一个异步的预读
+
+--> "page_cache_async_ra"
+--> ondemand_readahead
+
+--> "do_page_cache_ra"
+--> "page_cache_ra_unbounded"
+--> a_ops_read_page
+ 
+--> "xfs_vm_readpage"
+--> "iomap_readpage"
+--> "submit_bio"
+
+
+copy_page_to_iter if "" then  
+        -down> [ITER_BVEC|ITER_KVEC] copy_to_iter
+    else 
+        -> [!iov_iter_is_pipe] copy_page_to_iter_iovec
+    else
+        ->  copy_page_to_iter_pipe
+endif
+@enduml

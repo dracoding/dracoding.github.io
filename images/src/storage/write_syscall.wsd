@@ -1,0 +1,48 @@
+@startuml
+
+(*) --> "write"
+
+--> "ksys_write"
+--> "vfs_write"
+
+if "file->f_op->write" then
+    -left> "file->f_op->write"
+else
+    -> "new_sync_write" as write_iter
+endif
+
+
+write_iter --> "call_write_iter"
+--> "file->f_op->write_iter"
+note right: 对应file_operations的write_iter函数， 如xfs_file_write_iter
+
+--> [xfs] "xfs_file_write_iter"
+  
+if "" then
+    -left> [DAX] "xfs_file_dax_write"
+else
+    -down> [IOCB_DIRECT] "xfs_file_dio_aio_write"
+else
+    -right> "xfs_file_buffered_aio_write"
+endif
+
+--> ====B1====
+====B1==== --> "iomap_file_buffered_write" as iomap_write
+====B1==== --> "generic_write_sync"
+
+iomap_write --> "iomap_apply"
+ 
+--> ====B2====
+====B2==== --> "iomap_ops->iomap_begin"
+====B2==== --> "iomap_write_actor" as write_actor
+====B2==== --> "iomap_ops->iomap_end"
+
+write_actor --> ====B3====
+====B3==== --> "iomap_write_begin" as write_begin
+====B3==== --> "iov_iter_copy_from_user_atomic"
+====B3==== --> "iomap_write_end" as write_end
+
+write_begin --> xfs_buffered_write_iomap_begin
+write_end --> xfs_buffered_write_iomap_end,
+
+@enduml
