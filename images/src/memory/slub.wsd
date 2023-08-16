@@ -59,7 +59,7 @@ note left of kmem_cache::object_size
 end note
 
 note left of kmem_cache::offset
-    空闲对象的偏移
+    空闲对象的偏移, 一个offset+ objectde的大小, 获取下一个object的地址
 end note
 
 note left of kmem_cache::oo

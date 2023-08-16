@@ -138,6 +138,8 @@ class file {
         errseq_t f_sb_err; /* for syncfs */
 }
 
+note top: 打开文件的内核表示
+
 note right of file::f_op
     文件操作的方法集合
 end note
@@ -184,9 +186,7 @@ struct inode {
 
         dev_t i_rdev;
         loff_t i_size;
-        struct timespec64       i_atime;
-        struct timespec64       i_mtime;
-        struct timespec64       i_ctime;
+
         spinlock_t i_lock; /* i_blocks, i_bytes, maybe i_size */
         unsigned short i_bytes;
         u8 i_blkbits;
@@ -223,13 +223,12 @@ struct inode {
         struct file_lock_context *i_flctx;
         struct address_space i_data;
         struct list_head i_devices;
-        union {
-                struct pipe_inode_info  *i_pipe;
-                struct block_device *i_bdev;
-                struct cdev *i_cdev;
-                char *i_link;
-                unsigned i_dir_seq;
-        };
+
+                
+        struct pipe_inode_info  *i_pipe;  // start union
+        struct block_device *i_bdev;
+        struct cdev *i_cdev;
+        char *i_link;                   // end union
 
         __u32 i_generation;
         void *i_private; /* fs or device private pointer */
@@ -269,6 +268,19 @@ note left of inode::i_blocks
     文件所占块数
 end note
 
+
+class xa_state {
+        struct xarray *xa;
+        unsigned long xa_index;
+        unsigned char xa_shift;
+        unsigned char xa_sibs;
+        unsigned char xa_offset;
+        unsigned char xa_pad;           /* Helps gcc generate better code */
+        struct xa_node *xa_node;
+        struct xa_node *xa_alloc;
+        xa_update_node_t xa_update;
+}
+
 dentry::d_inode --> inode
 
 file::f_mapping --> address_space
@@ -279,5 +291,8 @@ file::f_ra --* file_ra_state
 inode::i_mapping --> address_space
 address_space::host -left-> inode
 address_space::i_pages --* xarray
+
+
+xa_state::xa --> xarray
 
 @enduml

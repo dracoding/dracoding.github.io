@@ -1,0 +1,180 @@
+@startuml
+
+class request_queue {
+        struct request          *last_merge;
+        struct elevator_queue   *elevator;
+        struct percpu_ref       q_usage_counter;
+        struct blk_queue_stats  *stats;
+        struct rq_qos *rq_qos;
+        const struct blk_mq_ops *mq_ops;
+        struct blk_mq_ctx __percpu      *queue_ctx;
+        unsigned int queue_depth;
+        struct blk_mq_hw_ctx __rcu      **queue_hw_ctx;
+        unsigned int nr_hw_queues;
+
+        struct blk_flush_queue  *fq;
+        struct list_head requeue_list;
+        struct delayed_work     requeue_work;
+
+
+        struct blk_mq_tag_set   *tag_set;
+        struct list_head        tag_set_list;
+        struct bio_set          bio_split;
+}
+
+note left of request_queue::elevator
+        调度器
+end note
+
+
+struct request {
+        struct request_queue *q;
+        struct blk_mq_ctx *mq_ctx;
+        struct blk_mq_hw_ctx *mq_hctx;
+
+        int tag;
+        int internal_tag;
+
+        unsigned int __data_len;
+        sector_t __sector;
+
+        struct bio *bio;
+        struct bio *biotail;
+
+        struct list_head queuelist;
+        struct gendisk *rq_disk;
+        struct hd_struct *part;
+
+        u64 start_time_ns;
+        u64 io_start_time_ns;
+
+        unsigned short write_hint;
+        unsigned short ioprio;
+
+        unsigned long deadline;
+        rq_end_io_fn *end_io;
+        void *end_io_data;
+}
+
+note left of request::__data_len
+        数据的总长度
+end note
+
+class blk_mq_ctx {
+        struct list_head        rq_lists[HCTX_MAX_TYPES];
+
+        unsigned int cpu;
+        unsigned short          index_hw[HCTX_MAX_TYPES];
+        struct blk_mq_hw_ctx    *hctxs[HCTX_MAX_TYPES];
+
+        unsigned long rq_dispatched[2];
+        unsigned long rq_merged;
+        unsigned long ____cacheline_aligned_in_smp rq_completed[2];
+
+        struct request_queue *queue;
+        struct blk_mq_ctxs *ctxs;
+        struct kobject kobj;
+}
+
+note top: per_cpu变量, 每个cpu分配一个
+
+note left of blk_mq_ctx::hctxs
+        关联的硬件队列
+end note
+
+struct blk_mq_hw_ctx {
+        struct list_head        dispatch;
+
+        struct delayed_work run_work;
+        cpumask_var_t cpumask;
+                          
+        int next_cpu;        
+        int next_cpu_batch;
+        unsigned long flags;
+        void *sched_data;
+        struct blk_mq_ctx **ctxs;
+
+        spinlock_t dispatch_wait_lock;
+        wait_queue_entry_t dispatch_wait;
+
+        atomic_t wait_index;
+        struct blk_mq_tags *tags;
+        struct blk_mq_tags *sched_tags;
+}
+
+note left of blk_mq_hw_ctx::dispatch
+        存放等待派发的rq
+end note
+
+class blk_mq_tag_set {
+        struct blk_mq_queue_map map[HCTX_MAX_TYPES];
+        unsigned int nr_maps;
+        const struct blk_mq_ops *ops;
+        unsigned int nr_hw_queues;
+        unsigned int queue_depth;
+        unsigned int reserved_tags;
+        unsigned int cmd_size;
+        int numa_node;
+        unsigned int timeout;
+        unsigned int flags;
+        void *driver_data;
+        atomic_t active_queues_shared_sbitmap;
+        atomic_t pending_queues_shared_sbitmap;
+
+        struct sbitmap_queue __bitmap_tags;
+        struct sbitmap_queue __breserved_tags;
+        struct blk_mq_tags **tags;
+
+        struct mutex tag_list_lock;
+        struct list_head tag_list;
+}
+
+note top: 描述一个块设备硬件相关的数据结构，包含硬件队列的数量，队列深度,分配给每个硬件队列的rq管理集合,还包含了软件队列与硬件队列的映射表
+
+note left of blk_mq_tag_set::tag_list
+        使用该tag_set的request_queue 链表
+end note
+
+note left of blk_mq_tag_set::tags
+        使用该tag_set的request_queue 链表
+end note
+
+note left of blk_mq_tag_set::nr_hw_queues
+        硬件队列数量
+end note
+
+
+struct blk_mq_tags {
+        unsigned int nr_tags;
+        unsigned int nr_reserved_tags;
+
+        atomic_t active_queues;
+        atomic_t pending_queues;
+
+        struct sbitmap_queue *bitmap_tags;
+        struct sbitmap_queue *breserved_tags;
+
+        struct sbitmap_queue __bitmap_tags;
+        struct sbitmap_queue __breserved_tags;
+
+        struct request **rqs;   
+        struct request **static_rqs;
+        struct list_head page_list;
+ }
+
+request_queue::queue_ctx --> blk_mq_ctx
+request_queue::tag_set --> blk_mq_tag_set
+request_queue::queue_hw_ctx --> blk_mq_hw_ctx
+
+' request::q --> request_queue
+request::mq_ctx --> blk_mq_ctx
+request::mq_hctx --> blk_mq_hw_ctx
+
+blk_mq_ctx::hctxs --> blk_mq_hw_ctx
+
+blk_mq_tag_set::tags --> blk_mq_tags
+
+blk_mq_hw_ctx::tags --> blk_mq_tags
+blk_mq_hw_ctx::ctxs --> blk_mq_ctx
+
+@enduml

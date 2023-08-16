@@ -1,0 +1,126 @@
+@startuml
+
+struct super_block {
+        struct list_head        s_list;         /* Keep this first */
+        dev_t s_dev;          /* search index; _not_ kdev_t */
+        unsigned char           s_blocksize_bits;
+        unsigned long           s_blocksize;
+        loff_t                  s_maxbytes;     /* Max file size */
+        struct file_system_type *s_type;
+        const struct super_operations   *s_op;
+        const struct dquot_operations   *dq_op;
+        const struct quotactl_ops       *s_qcop;
+        const struct export_operations *s_export_op;
+        unsigned long s_flags;
+        unsigned long s_iflags;       /* internal SB_I_* flags */
+        unsigned long s_magic;
+        struct dentry *s_root;
+        struct rw_semaphore     s_umount;
+        int s_count;
+        atomic_t s_active;
+
+        struct hlist_bl_head    s_roots;        /* alternate root dentries for NFS */
+        struct list_head        s_mounts;       /* list of mounts; _not_ for fs use */
+        struct block_device     *s_bdev;
+        struct backing_dev_info *s_bdi;
+        struct mtd_info         *s_mtd;
+        struct hlist_node       s_instances;
+        unsigned int            s_quota_types;  /* Bitmask of supported quota types */
+        struct quota_info       s_dquot;        /* Diskquota specific options */
+        struct sb_writers       s_writers;
+
+        void *s_fs_info;     /* Filesystem private info */
+        char s_id[32];       /* Informational name */
+        uuid_t s_uuid;         /* UUID */
+        unsigned int s_max_links;
+        fmode_t s_mode;
+
+        const char *s_subtype;
+        const struct dentry_operations *s_d_op; /* default d_op for dentries */
+        int cleancache_poolid;
+
+        struct shrinker s_shrink;       /* per-sb shrinker handle */
+
+        atomic_long_t s_remove_count;
+        atomic_long_t s_fsnotify_inode_refs;
+        int s_readonly_remount;
+
+        struct workqueue_struct *s_dio_done_wq;
+        struct hlist_head s_pins;
+        struct list_lru         s_dentry_lru;
+        struct list_lru         s_inode_lru;
+        struct rcu_head         rcu;
+        struct work_struct      destroy_work;
+
+        struct mutex            s_sync_lock;    /* sync serialisation lock */
+
+        int s_stack_depth;
+
+        spinlock_t              s_inode_list_lock ____cacheline_aligned_in_smp;
+        struct list_head        s_inodes;       /* all inodes */
+
+        spinlock_t              s_inode_wblist_lock;
+        struct list_head        s_inodes_wb;    /* writeback inodes */
+}
+
+note top: 一个超级块代表一个文件系统， 存储整个文件系统信息， 文件系统中的所有的inode要连接到super_block.
+
+note left of super_block::s_list
+    所有的super_block通过此链表链接到全局的super_blocks中
+end note
+
+note left of super_block::s_dev
+    包含此文件系统的块设备的标识符
+end note
+
+note left of super_block::s_blocksize_bits
+    数据块大小占用的位数
+end note
+
+note left of super_block::s_blocksize
+    文件系统中数据块大小，以字节单位
+end note
+
+note left of super_block::s_maxbytes
+    允许的最大的文件大小
+end note
+
+note left of super_block::s_type
+    文件系统类型
+end note
+
+note left of super_block::s_op
+    具体文件系统的用于超级块操作的函数集合
+end note
+
+note left of super_block::dq_op
+    具体文件系统用于限额操作的函数集合
+end note
+
+note left of super_block::s_qcop
+    用于配置磁盘限额的的方法，处理来自用户空间的请求
+end note
+
+note left of super_block::s_root
+    指向该具体文件系统安装目录的目录项
+end note
+
+note left of super_block::s_bdev
+    指向文件系统被安装的块设备
+end note
+
+note left of super_block::s_instances
+    将属于同一种文件系统类型的super_block链接起来
+end note
+
+note left of super_block::s_inode_lru
+    最近最少使用的inode列表
+end note
+
+note left of super_block::s_inodes
+    超级块所有的inode链表
+end note
+
+
+
+@enduml

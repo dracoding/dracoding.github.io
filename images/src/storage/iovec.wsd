@@ -1,0 +1,59 @@
+@startuml
+
+struct iovec
+{
+        void __user *iov_base;  /* BSD uses caddr_t (1003.1g requires void *) */
+        __kernel_size_t iov_len; /* Must be size_t (1003.1g) */
+}
+
+note top: 读取数据用户态的目的地址
+
+
+struct kiocb { 
+        struct file *ki_filp;
+        
+        randomized_struct_fields_start
+        
+        loff_t ki_pos;
+        void (*ki_complete)(struct kiocb *iocb, long ret, long ret2);
+        void *private;
+        int ki_flags;
+        u16 ki_hint;
+        u16 ki_ioprio; /* See linux/ioprio.h */
+
+        unsigned int            ki_cookie; /* for ->iopoll */
+        struct wait_page_queue  *ki_waitq; /* for async buffered IO */
+
+        randomized_struct_fields_end
+}
+
+note left of kiocb::ki_pos
+    读取偏移的位置
+end note
+
+
+struct iov_iter {
+        unsigned int type;
+        size_t iov_offset;
+        size_t count;
+
+        const struct iovec *iov;
+        const struct kvec *kvec;
+        const struct bio_vec *bvec;
+        struct pipe_inode_info *pipe;   // union end
+
+        unsigned long nr_segs;   // union start
+        struct {
+            unsigned int head;
+            unsigned int start_head;
+        };                      // union end
+}
+
+note left of iov_iter::count
+    需要读取数据的长度
+end note
+
+iov_iter::iov --> iovec
+
+
+@enduml

@@ -1,0 +1,108 @@
+@startuml
+
+class gendisk {
+        int major;
+        int first_minor;
+        int minors;
+
+        char disk_name[DISK_NAME_LEN];
+
+        unsigned short events;
+        unsigned short event_flags;
+
+        struct disk_part_tbl __rcu *part_tbl;
+        struct hd_struct part0;
+        DECLARE_BITMAP(user_ro_bitmap, DISK_MAX_PARTS);
+        
+        const struct block_device_operations *fops;
+        struct request_queue *queue;
+        void *private_data;
+                
+        int flags;
+        unsigned long state;
+        struct rw_semaphore lookup_sem;
+        struct kobject *slave_dir;
+
+        struct timer_rand_state *random;
+        atomic64_t sync_io_sectors;     /* RAID */
+        struct disk_events *ev;
+
+        int node_id;
+        struct badblocks *bb;
+        struct lockdep_map lockdep_map;
+}
+
+note top: 每个物理磁盘对应一个gendisk结构
+
+note right of gendisk::major
+    主设备号
+end note
+
+note right of gendisk::first_minor
+    与磁盘关联的第一个次设备号
+end note
+
+note right of gendisk::disk_name
+    磁盘标准名称
+end note
+
+note right of gendisk::part_tbl
+    磁盘的分区表，可以包含多个struct hd_struct分区
+end note
+
+class disk_part_tbl {
+        struct rcu_head rcu_head;
+        int len;           
+        struct hd_struct __rcu *last_lookup;
+        struct hd_struct __rcu *part[];
+}
+
+class hd_struct {
+        sector_t start_sect;
+        sector_t nr_sects;
+
+        unsigned long stamp;
+
+        struct disk_stats __percpu *dkstats;
+        struct percpu_ref ref;
+        struct device __dev;
+        struct kobject *holder_dir;
+        bool read_only;
+        int partno;
+
+        struct partition_meta_info *info;
+        struct rcu_work rcu_work;
+}
+
+note top: 每个分区一个hd_struct结构
+
+
+class request_queue {
+        struct request          *last_merge;
+        struct elevator_queue   *elevator;
+        struct percpu_ref       q_usage_counter;
+        struct blk_queue_stats  *stats;
+        struct rq_qos *rq_qos;
+        const struct blk_mq_ops *mq_ops;
+        struct blk_mq_ctx __percpu      *queue_ctx;
+        unsigned int queue_depth;
+        struct blk_mq_hw_ctx __rcu      **queue_hw_ctx;
+        unsigned int nr_hw_queues;
+
+        struct list_head        icq_list;
+        struct queue_limits     limits;
+
+        struct blk_mq_tag_set   *tag_set;
+        struct list_head        tag_set_list;
+        struct bio_set          bio_split;
+        struct dentry *debugfs_dir;
+
+}
+
+
+gendisk::queue --> request_queue
+gendisk::part_tbl --> disk_part_tbl
+
+disk_part_tbl::part --> hd_struct
+
+@enduml

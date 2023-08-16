@@ -2,10 +2,16 @@
 ' left to right direction
 
 class task_struct {
-    struct css_set __rcu            *cgroups
+    struct css_set __rcu            *cgroups；
+    struct list_head cg_list;
 }
 note left of task_struct::cgroups
     存储了与进程有关的 cgroups 信息
+end note
+
+note left of task_struct::cg_list
+    cg_list是一个嵌入的 list_head 结构，
+    用于将连到同一个 css_set 的进程组织成一个链表
 end note
 
 class cgroup {
@@ -41,6 +47,10 @@ class cgroup_subsys_state {
 }
 
 note top: 代表进程与一个特定子系统相关的信息
+
+note left of cgroup_subsys_state::cgroup
+    进程所属的cgroup, 进程和cgroup的关系是多对多关系
+end note
 
 class cgroup_subsys {
     int (*css_online)(struct cgroup_subsys_state *css);
@@ -83,7 +93,6 @@ class css_set {
         bool dead;
         struct rcu_head rcu_head;
 }
-
 
 note right of css_set::subsys
     包含的子系统初始化后不可更改

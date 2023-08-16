@@ -1,0 +1,214 @@
+@startuml
+
+class request_queue {
+        struct request          *last_merge;
+        struct elevator_queue   *elevator;
+        struct percpu_ref       q_usage_counter;
+        struct blk_queue_stats  *stats;
+        struct rq_qos *rq_qos;
+        const struct blk_mq_ops *mq_ops;
+        struct blk_mq_ctx __percpu      *queue_ctx;
+        unsigned int queue_depth;
+        struct blk_mq_hw_ctx __rcu      **queue_hw_ctx;
+        unsigned int nr_hw_queues;
+
+        struct list_head        icq_list;
+        struct queue_limits     limits;
+
+        struct mutex debugfs_mutex;
+        struct blk_flush_queue  *fq;
+        struct list_head requeue_list;
+
+        struct blk_mq_tag_set   *tag_set;
+        struct list_head        tag_set_list;
+        struct bio_set          bio_split;
+
+}
+
+note left of request_queue::elevator
+        调度器
+end note
+
+
+class elevator_queue
+{
+        struct elevator_type *type;
+        void *elevator_data;
+        struct kobject kobj;
+        struct mutex sysfs_lock;
+        unsigned int registered:1;
+        DECLARE_HASHTABLE(hash, ELV_HASH_BITS);
+}
+
+
+class elevator_type
+{
+        struct kmem_cache *icq_cache;
+
+        struct elevator_mq_ops ops;
+
+        size_t icq_size;        /* see iocontext.h */
+        size_t icq_align;       /* ditto */
+        struct elv_fs_entry *elevator_attrs;
+        const char *elevator_name;
+        const char *elevator_alias;
+        const unsigned int elevator_features;
+        struct module *elevator_owner;
+
+
+        char icq_cache_name[ELV_NAME_MAX + 6];  /* elvname + "_io_cq" */
+        struct list_head list;
+}
+
+
+class elevator_mq_ops {
+        int (*init_sched)(struct request_queue *, struct elevator_type *);
+        void (*exit_sched)(struct elevator_queue *);
+        int (*init_hctx)(struct blk_mq_hw_ctx *, unsigned int);
+        void (*exit_hctx)(struct blk_mq_hw_ctx *, unsigned int);
+        void (*depth_updated)(struct blk_mq_hw_ctx *);
+                
+        bool (*allow_merge)(struct request_queue *, struct request *, struct bio *);
+        bool (*bio_merge)(struct request_queue *, struct bio *, unsigned int);
+        int (*request_merge)(struct request_queue *q, struct request **, struct bio *);
+        void (*request_merged)(struct request_queue *, struct request *, enum elv_merge);
+        void (*requests_merged)(struct request_queue *, struct request *, struct request *);
+        void (*limit_depth)(unsigned int, struct blk_mq_alloc_data *);
+        void (*prepare_request)(struct request *);
+        void (*finish_request)(struct request *);
+        void (*insert_requests)(struct blk_mq_hw_ctx *, struct list_head *, bool);
+        struct request *(*dispatch_request)(struct blk_mq_hw_ctx *);
+        bool (*has_work)(struct blk_mq_hw_ctx *);
+        void (*completed_request)(struct request *, u64);
+        void (*requeue_request)(struct request *);
+        struct request *(*former_request)(struct request_queue *, struct request *);
+        struct request *(*next_request)(struct request_queue *, struct request *);
+        void (*init_icq)(struct io_cq *);
+        void (*exit_icq)(struct io_cq *);
+}
+
+
+class bio {
+        struct bio *bi_next;
+        struct gendisk *bi_disk;
+        unsigned int bi_opf;
+        unsigned short bi_flags;
+        unsigned short bi_ioprio;
+        unsigned short bi_write_hint;
+        blk_status_t bi_status;
+        u8 bi_partno;
+        atomic_t __bi_remaining;
+
+        struct bvec_iter bi_iter;
+        bio_end_io_t *bi_end_io;
+ 
+        void *bi_private;
+
+        unsigned short bi_vcnt;
+        unsigned short bi_max_vecs;
+
+        atomic_t __bi_cnt;
+
+        struct bio_vec *bi_io_vec;
+        struct bio_set *bi_pool;
+        struct bio_vec bi_inline_vecs[];
+}
+
+note right of bio::bi_end_io
+    设置i/o结束的回调函数
+end note
+
+note right of bio::bi_vcnt
+    bio_vec的数量
+end note
+
+note right of bio::bi_max_vecs
+    bio_vec的最大的数量
+end note
+
+note right of bio::bi_io_vec
+    内存page列表
+end note
+
+class bvec_iter {
+    sector_t bi_sector;
+    unsigned int bi_size;
+    unsigned int bi_idx;
+    unsigned int bi_bvec_done; 
+}
+
+note right of bvec_iter::bi_sector
+    存放逻辑块号
+end note
+
+struct request {
+        struct request_queue *q;
+        struct blk_mq_ctx *mq_ctx;
+        struct blk_mq_hw_ctx *mq_hctx;
+
+        int tag;
+        int internal_tag;
+
+        unsigned int __data_len;        /* total data len */
+        sector_t __sector;              /* sector cursor */
+
+        struct bio *bio;
+        struct bio *biotail;
+
+        struct list_head queuelist;
+
+        struct gendisk *rq_disk;
+        struct hd_struct *part;
+
+        unsigned short stats_sectors;
+        unsigned short nr_phys_segments;
+
+        unsigned short write_hint;
+        unsigned short ioprio;
+
+        unsigned long deadline;
+        rq_end_io_fn *end_io;
+        void *end_io_data;
+}
+
+
+class gendisk {
+        int major;
+        int first_minor;
+        int minors;
+}
+
+struct deadline_data {
+        struct rb_root sort_list[2];
+        struct list_head fifo_list[2];
+
+        struct request *next_rq[2];
+        unsigned int batching;          /* number of sequential requests made */
+        unsigned int starved;           /* times reads have starved writes */
+
+        int fifo_expire[2];
+        int fifo_batch;
+        int writes_starved;
+        int front_merges;
+
+        spinlock_t lock;
+        spinlock_t zone_lock;
+        struct list_head dispatch;
+}
+
+
+request_queue::elevator --> elevator_queue
+
+elevator_queue::type --> elevator_type
+elevator_queue::elevator_data --> deadline_data
+
+elevator_type::ops --* elevator_mq_ops
+
+request::q --> request_queue
+request::bio --> bio
+
+bio::bi_disk --> gendisk
+bio::bi_iter --* bvec_iter 
+
+
+@enduml

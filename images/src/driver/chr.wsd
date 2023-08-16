@@ -1,0 +1,35 @@
+@startuml
+
+class kobj_map {
+        struct probe *probes[255];
+        struct mutex *lock;
+}
+
+
+struct probe {
+    struct probe *next;
+    dev_t dev;
+    unsigned long range;
+    struct module *owner;
+    kobj_probe_t *get;
+    int (*lock)(dev_t, void *);
+    void *data;
+}
+
+struct cdev {
+        struct kobject kobj;
+        struct module *owner;
+        const struct file_operations *ops;
+        struct list_head list;
+        dev_t dev;
+        unsigned int count;
+}
+
+note right of cdev::count
+    该设备对应的从设备号的数量
+end note
+
+probe::data --> cdev
+kobj_map::probes --> probe
+
+@enduml
